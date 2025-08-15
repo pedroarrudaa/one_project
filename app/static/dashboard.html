@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn-based O-1 Visa Assessment Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #121829;
+      --muted: #8a94a7;
+      --text: #e6e9f0;
+      --primary: #6c8cff;
+      --accent: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+        Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(180deg, #0b0f19, #0a0d16 50%, #090c14);
+      color: var(--text);
+    }
+    header {
+      padding: 24px 24px 8px 24px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 14px;
+    }
+    .container { padding: 0 24px 24px 24px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 16px;
+    }
+    .card {
+      background: radial-gradient(1200px 400px at -100% -50%, rgba(108,140,255,0.08), transparent), var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 32px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 16px;
+    }
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: rgba(108,140,255,0.05);
+    }
+    .upload-area.dragover {
+      border-color: var(--primary);
+      background: rgba(108,140,255,0.1);
+    }
+    .upload-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover {
+      background: #5a7cff;
+      transform: translateY(-1px);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: #1a2035;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .rankings-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    .rankings-table th,
+    .rankings-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .rankings-table th {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .rank-1 { background: #ffd700; color: #000; }
+    .rank-2 { background: #c0c0c0; color: #000; }
+    .rank-3 { background: #cd7f32; color: #fff; }
+    .rank-other { background: var(--border); color: var(--text); }
+    .score-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .score-high { background: rgba(34,197,94,0.2); color: var(--accent); }
+    .score-medium { background: rgba(245,158,11,0.2); color: var(--warning); }
+    .score-low { background: rgba(239,68,68,0.2); color: var(--danger); }
+    .social-links {
+      display: flex;
+      gap: 8px;
+    }
+    .social-link {
+      padding: 4px 8px;
+      background: rgba(108,140,255,0.1);
+      border: 1px solid rgba(108,140,255,0.3);
+      border-radius: 4px;
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 12px;
+    }
+    .social-link:hover {
+      background: rgba(108,140,255,0.2);
+    }
+    .evidence-list {
+      font-size: 12px;
+      color: var(--muted);
+      max-width: 300px;
+    }
+    .evidence-item {
+      margin-bottom: 2px;
+    }
+    .status-badge {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-completed { background: rgba(34,197,94,0.2); color: var(--accent); }
+    .status-processing { background: rgba(245,158,11,0.2); color: var(--warning); }
+    .status-pending { background: rgba(156,163,175,0.2); color: var(--muted); }
+    .status-failed { background: rgba(239,68,68,0.2); color: var(--danger); }
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top: 2px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .hidden { display: none; }
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+    .message.success {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: var(--accent);
+    }
+    .message.error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      🎯 LinkedIn-based O-1 Visa Assessment
+    </div>
+    <div class="subtitle">
+      AI-powered LinkedIn profile analysis for O-1 visa compatibility using GPT-4o-mini
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+      <!-- Left Panel: Upload & Controls -->
+      <div>
+        <div class="card">
+          <div class="card-title">📁 Upload Profiles</div>
+          
+          <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📄</div>
+            <div>Drop CSV file here or click to browse</div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+              Supports CSV with profile data
+            </div>
+          </div>
+          
+          <input type="file" id="fileInput" accept=".csv" style="display: none;" />
+          
+          <div id="uploadMessage" class="hidden"></div>
+          
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button class="btn" id="processBtn" disabled>
+              <span class="loading hidden" id="processLoading"></span>
+              🚀 Process All Profiles
+            </button>
+            <button class="btn btn-secondary" id="refreshBtn">
+              🔄 Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- System Stats -->
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-title">📊 System Stats</div>
+          <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+              <div class="stat-value" id="totalProfiles">-</div>
+              <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="completedProfiles">-</div>
+              <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="processingProfiles">-</div>
+              <div class="stat-label">Processing</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="pendingProfiles">-</div>
+              <div class="stat-label">Pending</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Rankings Table -->
+      <div class="card">
+        <div class="card-title">🏆 O-1 Visa Compatibility Rankings</div>
+        
+        <div id="rankingsContainer">
+          <table class="rankings-table" id="rankingsTable">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Full Name</th>
+                <th>Social Links</th>
+                <th>Email</th>
+                <th>Score</th>
+                <th>Evidence Summary</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rankingsBody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--muted); padding: 40px;">
+                  No rankings available. Upload and process profiles to see results.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DOM elements
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const uploadMessage = document.getElementById('uploadMessage');
+    const processBtn = document.getElementById('processBtn');
+    const processLoading = document.getElementById('processLoading');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const rankingsBody = document.getElementById('rankingsBody');
+    
+    // Stats elements
+    const totalProfiles = document.getElementById('totalProfiles');
+    const completedProfiles = document.getElementById('completedProfiles');
+    const processingProfiles = document.getElementById('processingProfiles');
+    const pendingProfiles = document.getElementById('pendingProfiles');
+
+    // File upload handling
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFileUpload(files[0]);
+      }
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileUpload(e.target.files[0]);
+      }
+    });
+
+    // Process profiles
+    processBtn.addEventListener('click', processAllProfiles);
+    refreshBtn.addEventListener('click', loadData);
+
+    // File upload function
+    async function handleFileUpload(file) {
+      if (!file.name.endsWith('.csv')) {
+        showMessage('Please select a CSV file.', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        showMessage('Uploading CSV file...', 'success');
+        
+        const response = await fetch('/profiles/upload-csv', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          showMessage(`Successfully uploaded ${result.length} profiles!`, 'success');
+          processBtn.disabled = false;
+          loadData();
+        } else {
+          const error = await response.json();
+          showMessage(`Upload failed: ${error.detail}`, 'error');
+        }
+      } catch (error) {
+        showMessage(`Upload error: ${error.message}`, 'error');
+      }
+    }
+
+    // Process all profiles
+    async function processAllProfiles() {
+      processBtn.disabled = true;
+      processLoading.classList.remove('hidden');
+      
+      try {
+        showMessage('Processing profiles through LinkedIn pipeline...', 'success');
+        
+        const response = await fetch('/profiles/process-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_concurrent: 3 })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          showMessage(`Processing completed! ${result.successful} successful, ${result.failed} failed.`, 'success');
+          loadData();
+        } else {
+          const error = await response.json();
+          showMessage(`Processing failed: ${error.detail}`, 'error');
+        }
+      } catch (error) {
+        showMessage(`Processing error: ${error.message}`, 'error');
+      } finally {
+        processBtn.disabled = false;
+        processLoading.classList.add('hidden');
+      }
+    }
+
+    // Load data
+    async function loadData() {
+      await Promise.all([loadStats(), loadRankings()]);
+    }
+
+    // Load system stats
+    async function loadStats() {
+      try {
+        const response = await fetch('/stats');
+        if (response.ok) {
+          const stats = await response.json();
+          totalProfiles.textContent = stats.total_profiles;
+          completedProfiles.textContent = stats.completed;
+          processingProfiles.textContent = stats.processing;
+          pendingProfiles.textContent = stats.pending;
+        }
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+
+    // Load rankings
+    async function loadRankings() {
+      try {
+        const response = await fetch('/rankings');
+        if (response.ok) {
+          const data = await response.json();
+          displayRankings(data.rankings);
+        }
+      } catch (error) {
+        console.error('Failed to load rankings:', error);
+      }
+    }
+
+    // Display rankings
+    function displayRankings(rankings) {
+      if (!rankings || rankings.length === 0) {
+        rankingsBody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--muted); padding: 40px;">
+              No rankings available. Upload and process profiles to see results.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      rankingsBody.innerHTML = rankings.map(ranking => `
+        <tr>
+          <td>
+            <span class="rank-badge ${getRankClass(ranking.rank)}">${ranking.rank}</span>
+          </td>
+          <td><strong>${ranking.full_name}</strong></td>
+          <td>
+            <div class="social-links">
+              ${Object.entries(ranking.social_links || {}).map(([platform, url]) => 
+                `<a href="${url}" target="_blank" class="social-link">${platform}</a>`
+              ).join('')}
+            </div>
+          </td>
+          <td>
+            <a href="mailto:${ranking.email}" style="color: var(--primary);">${ranking.email}</a>
+          </td>
+          <td>
+            <div class="score-badge ${getScoreClass(ranking.score)}">${ranking.score?.toFixed(1) || 'N/A'}</div>
+            <div style="font-size: 10px; color: var(--muted); margin-top: 2px;">${ranking.likelihood || 'Unknown'}</div>
+          </td>
+          <td>
+            <div class="evidence-list">
+              ${formatEvidence(ranking.evidence)}
+            </div>
+          </td>
+          <td>
+            <span class="status-badge status-${ranking.processing_status}">${ranking.processing_status}</span>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Helper functions
+    function getRankClass(rank) {
+      if (rank === 1) return 'rank-1';
+      if (rank === 2) return 'rank-2';
+      if (rank === 3) return 'rank-3';
+      return 'rank-other';
+    }
+
+    function getScoreClass(score) {
+      if (score >= 7) return 'score-high';
+      if (score >= 5) return 'score-medium';
+      return 'score-low';
+    }
+
+    function formatEvidence(evidence) {
+      if (!evidence || Object.keys(evidence).length === 0) {
+        return '<div style="color: var(--muted);">No evidence available</div>';
+      }
+      
+      const items = [];
+      Object.entries(evidence).forEach(([category, evidenceList]) => {
+        if (evidenceList && evidenceList.length > 0) {
+          items.push(`<strong>${category}:</strong> ${evidenceList.slice(0, 2).join(', ')}`);
+        }
+      });
+      
+      return items.slice(0, 3).map(item => `<div class="evidence-item">${item}</div>`).join('');
+    }
+
+    function showMessage(text, type) {
+      uploadMessage.className = `message ${type}`;
+      uploadMessage.textContent = text;
+      uploadMessage.classList.remove('hidden');
+      
+      setTimeout(() => {
+        uploadMessage.classList.add('hidden');
+      }, 5000);
+    }
+
+    // Initial load
+    loadData();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>
