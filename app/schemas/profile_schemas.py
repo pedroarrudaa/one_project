@@ -79,6 +79,8 @@ class RankingEntry(BaseModel):
     full_name: str
     seniority_level: Optional[str] = Field(None, description="Professional seniority: Junior/Senior/Executive/VP")
     current_title: Optional[str] = Field(None, description="Current job title")
+    social_influence: Optional[str] = Field(None, description="Social influence level and reach")
+    follower_counts: Optional[Dict[str, int]] = Field(default_factory=dict, description="Follower counts by platform")
     social_links: Dict[str, str] = Field(default_factory=dict)
     email: str
     evidence: Dict[str, List[str]] = Field(default_factory=dict)

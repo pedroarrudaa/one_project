@@ -210,22 +210,33 @@ def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
         if profile.gpt_assessment and "recommendation" in profile.gpt_assessment:
             recommendation = profile.gpt_assessment["recommendation"]
         
-        # Extract seniority info from LinkedIn data
+        # Extract seniority and social influence info from LinkedIn data
         seniority_level = None
         current_title = None
+        social_influence = None
+        follower_counts = {}
+        
         if profile.linkedin_data:
             basic_info = profile.linkedin_data.get("basic_info", {})
             current_title = basic_info.get("headline", "")
-            # Use GPT service to classify seniority
+            
+            # Use GPT service to classify seniority and social influence
             from app.services.gpt_scoring_service import GPTScoringService
             gpt_service = GPTScoringService()
             seniority_level, _, _ = gpt_service.classify_seniority_level(current_title, basic_info.get("current_company", ""))
+            
+            # Analyze social influence
+            influence_score, influence_analysis, follower_breakdown = gpt_service.analyze_social_influence(profile.linkedin_data)
+            social_influence = influence_analysis
+            follower_counts = follower_breakdown
         
         rankings.append(RankingEntry(
             rank=rank,
             full_name=profile.name,
             seniority_level=seniority_level,
             current_title=current_title,
+            social_influence=social_influence,
+            follower_counts=follower_counts,
             social_links=profile.social_links or {},
             email=profile.email,
             evidence=profile.o1_evidence or {},

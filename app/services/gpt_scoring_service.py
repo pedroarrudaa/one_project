@@ -91,6 +91,70 @@ class GPTScoringService:
         # Default to Junior
         return ("Junior", 2, f"Entry/mid-level title: {job_title}")
     
+    def analyze_social_influence(self, profile_data: Dict[str, Any]) -> Tuple[int, str, Dict[str, int]]:
+        """
+        Analyze social media influence based on followers across platforms.
+        
+        Args:
+            profile_data: Complete profile data including social links and follower counts
+            
+        Returns:
+            Tuple of (influence_score_1_to_10, analysis_summary, follower_breakdown)
+        """
+        basic_info = profile_data.get("basic_info", {})
+        
+        # Extract follower counts
+        linkedin_followers = basic_info.get("followers_count", 0)
+        linkedin_connections = basic_info.get("connections_count", 0)
+        
+        # For now, we mainly have LinkedIn data from BrightData
+        # Twitter and GitHub followers would come from social_links if we had them
+        followers = {
+            "linkedin_followers": linkedin_followers,
+            "linkedin_connections": linkedin_connections,
+            "twitter_followers": 0,  # Would be populated if we had Twitter API
+            "github_followers": 0    # Would be populated if we had GitHub API
+        }
+        
+        total_social_reach = linkedin_followers + linkedin_connections
+        
+        # Scoring based on social reach (1-10 scale)
+        if total_social_reach >= 50000:  # 50K+ = Influencer level
+            score = 10
+            level = "Major Influencer"
+        elif total_social_reach >= 25000:  # 25K+ = Strong influence
+            score = 9
+            level = "Strong Influencer"
+        elif total_social_reach >= 10000:  # 10K+ = Notable influence
+            score = 8
+            level = "Notable Influence"
+        elif total_social_reach >= 5000:   # 5K+ = Good influence
+            score = 7
+            level = "Good Influence"
+        elif total_social_reach >= 2500:   # 2.5K+ = Moderate influence
+            score = 6
+            level = "Moderate Influence"
+        elif total_social_reach >= 1000:   # 1K+ = Some influence
+            score = 5
+            level = "Some Influence"
+        elif total_social_reach >= 500:    # 500+ = Limited influence
+            score = 4
+            level = "Limited Influence"
+        elif total_social_reach >= 100:    # 100+ = Minimal influence
+            score = 3
+            level = "Minimal Influence"
+        elif total_social_reach > 0:       # Some presence
+            score = 2
+            level = "Basic Presence"
+        else:                               # No social presence
+            score = 1
+            level = "No Social Presence"
+        
+        # Create detailed analysis
+        analysis = f"{level} - LinkedIn: {linkedin_connections:,} connections + {linkedin_followers:,} followers = {total_social_reach:,} total reach"
+        
+        return score, analysis, followers
+    
     async def assess_o1_compatibility(self, profile_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Assess O-1 visa compatibility using GPT-4o-mini analysis.
@@ -151,7 +215,7 @@ Key LinkedIn-based O-1 criteria to evaluate:
 2. **Company Prestige**: Work at top-tier companies (FAANG, unicorns, Fortune 500, prestigious startups)
 3. **Career Progression**: Rapid advancement, increasing responsibilities, clear progression through seniority levels
 4. **Professional Network**: High connection count, recommendations from senior professionals
-5. **Skills & Expertise**: Specialized skills, certifications, technical expertise relevant to field
+5. **Social Influence & Recognition**: IMPORTANT - Use the social influence analysis provided (followers, reach, online presence)
 
 **SENIORITY LEVEL SCORING (Most Important Factor):**
 - **VP Level (9-10 points)**: CTO, CEO, Founder, VP, Chief Officer, Head of Department
@@ -159,9 +223,19 @@ Key LinkedIn-based O-1 criteria to evaluate:
 - **Senior Level (4-6 points)**: Senior Engineer, Staff Engineer, Senior Specialist, Senior Consultant  
 - **Junior Level (1-3 points)**: Engineer, Analyst, Coordinator, Associate, Entry-level roles
 
+**SOCIAL INFLUENCE SCORING (Recognition Factor):**
+- **Major Influencer (10 points)**: 50K+ total reach - Industry thought leader level
+- **Strong Influencer (9 points)**: 25K+ total reach - Significant industry presence
+- **Notable Influence (8 points)**: 10K+ total reach - Well-known in field
+- **Good Influence (7 points)**: 5K+ total reach - Established professional network
+- **Moderate Influence (6 points)**: 2.5K+ total reach - Growing influence
+- **Some Influence (5 points)**: 1K+ total reach - Active professional presence
+- **Limited Influence (1-4 points)**: <1K total reach - Basic or minimal presence
+
 Assess each criterion on a scale of 1-10 based on what's visible in LinkedIn:
 - **Professional Seniority**: Use the provided seniority analysis - this is pre-calculated and crucial
 - **Company Prestige**: Google, Meta, Apple, Microsoft, OpenAI, top startups, well-known brands
+- **Social Influence & Recognition**: Use the provided social influence analysis - shows industry recognition
 - **Career Progression**: Multiple promotions, increasing scope, job title evolution
 - **Professional Network**: 500+ connections, recommendations from executives/leaders
 - **Skills & Expertise**: Advanced technical skills, industry certifications, specialized knowledge
@@ -205,6 +279,9 @@ Respond in JSON format with the following structure:
         current_company = basic_info.get('current_company', 'N/A')
         seniority_level, seniority_score, seniority_reasoning = self.classify_seniority_level(current_title, current_company)
         
+        # Analyze social influence
+        influence_score, influence_analysis, follower_breakdown = self.analyze_social_influence(profile_data)
+        
         prompt = f"""Please assess the following professional's O-1 visa eligibility based on LinkedIn data:
 
 **BASIC INFORMATION:**
@@ -212,10 +289,17 @@ Respond in JSON format with the following structure:
 - Current Title: {current_title}
 - **SENIORITY LEVEL: {seniority_level} (Score: {seniority_score}/10)**
 - **Seniority Analysis: {seniority_reasoning}**
+- **SOCIAL INFLUENCE: {influence_analysis} (Score: {influence_score}/10)**
 - Location: {basic_info.get('location', 'N/A')}
 - Professional Summary: {basic_info.get('summary', 'N/A')[:300]}...
-- LinkedIn Connections: {basic_info.get('connections_count', 0)}
 - Current Company: {current_company}
+
+**SOCIAL MEDIA REACH & INFLUENCE:**
+- LinkedIn Connections: {follower_breakdown['linkedin_connections']:,}
+- LinkedIn Followers: {follower_breakdown['linkedin_followers']:,}
+- Twitter Followers: {follower_breakdown['twitter_followers']:,} (if available)
+- GitHub Followers: {follower_breakdown['github_followers']:,} (if available)
+- **Total Social Reach: {follower_breakdown['linkedin_connections'] + follower_breakdown['linkedin_followers']:,}**
 
 **PROFESSIONAL EXPERIENCE (Focus on seniority progression and company prestige):**"""
         
