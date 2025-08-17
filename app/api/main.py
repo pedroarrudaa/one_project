@@ -210,9 +210,22 @@ def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
         if profile.gpt_assessment and "recommendation" in profile.gpt_assessment:
             recommendation = profile.gpt_assessment["recommendation"]
         
+        # Extract seniority info from LinkedIn data
+        seniority_level = None
+        current_title = None
+        if profile.linkedin_data:
+            basic_info = profile.linkedin_data.get("basic_info", {})
+            current_title = basic_info.get("headline", "")
+            # Use GPT service to classify seniority
+            from app.services.gpt_scoring_service import GPTScoringService
+            gpt_service = GPTScoringService()
+            seniority_level, _, _ = gpt_service.classify_seniority_level(current_title, basic_info.get("current_company", ""))
+        
         rankings.append(RankingEntry(
             rank=rank,
             full_name=profile.name,
+            seniority_level=seniority_level,
+            current_title=current_title,
             social_links=profile.social_links or {},
             email=profile.email,
             evidence=profile.o1_evidence or {},

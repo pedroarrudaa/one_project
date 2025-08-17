@@ -18,6 +18,79 @@ class GPTScoringService:
         self.temperature = settings.gpt_temperature
         self.max_tokens = settings.gpt_max_tokens
     
+    def classify_seniority_level(self, job_title: str, company: str = "") -> Tuple[str, int, str]:
+        """
+        Classify professional seniority level based on job title.
+        
+        Args:
+            job_title: Current or most recent job title
+            company: Company name for context
+            
+        Returns:
+            Tuple of (level_name, score_1_to_10, reasoning)
+        """
+        if not job_title:
+            return ("Junior", 2, "No job title available")
+        
+        title_lower = job_title.lower()
+        
+        # VP Level (9-10 points) - Must be exact matches to avoid false positives
+        vp_keywords = [
+            'vp of', 'vp ', 'vice president', 'svp', 'senior vice president', 'evp', 'executive vice president',
+            'chief technology officer', 'chief executive officer', 'chief financial officer',
+            'chief operating officer', 'chief marketing officer', 'cto', 'ceo', 'cfo', 'coo', 'cmo',
+            'head of engineering', 'head of product', 'head of data', 'head of ai', 'head of ml',
+            'founder', 'co-founder', 'cofounder'
+        ]
+        
+        # Executive Level (7-8 points)  
+        executive_keywords = [
+            'director', 'senior director', 'managing director', 'executive director',
+            'principal', 'senior principal', 'distinguished', 'fellow', 'architect',
+            'lead', 'team lead', 'tech lead', 'engineering manager', 'senior manager',
+            'group manager', 'program manager', 'senior program manager'
+        ]
+        
+        # Senior Level (4-6 points)
+        senior_keywords = [
+            'senior', 'sr.', 'staff', 'senior staff', 'specialist', 'senior specialist',
+            'consultant', 'senior consultant', 'expert', 'senior expert'
+        ]
+        
+        # Check VP level - More precise matching
+        for keyword in vp_keywords:
+            # Exact match or word boundary match
+            if (keyword == title_lower or 
+                f' {keyword} ' in f' {title_lower} ' or
+                title_lower.startswith(keyword + ' ') or
+                title_lower.endswith(' ' + keyword)):
+                
+                # Extra validation for common words that might be false positives
+                if keyword in ['president'] and 'vice' not in title_lower and 'senior' not in title_lower:
+                    continue
+                    
+                # Allow single word VP titles for specific C-level and founder roles
+                if len(job_title.split()) == 1 and keyword not in ['cto', 'ceo', 'cfo', 'coo', 'cmo', 'founder']:
+                    continue
+                    
+                score = 10 if any(k in title_lower for k in ['cto', 'ceo', 'founder', 'chief']) else 9
+                return ("VP", score, f"VP-level title: {job_title}")
+        
+        # Check Executive level
+        for keyword in executive_keywords:
+            if keyword in title_lower:
+                score = 8 if any(k in title_lower for k in ['director', 'principal', 'distinguished']) else 7
+                return ("Executive", score, f"Executive-level title: {job_title}")
+        
+        # Check Senior level
+        for keyword in senior_keywords:
+            if keyword in title_lower:
+                score = 6 if 'staff' in title_lower else 5 if 'senior' in title_lower else 4
+                return ("Senior", score, f"Senior-level title: {job_title}")
+        
+        # Default to Junior
+        return ("Junior", 2, f"Entry/mid-level title: {job_title}")
+    
     async def assess_o1_compatibility(self, profile_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Assess O-1 visa compatibility using GPT-4o-mini analysis.
@@ -74,14 +147,20 @@ class GPTScoringService:
 The O-1 visa requires demonstrating "extraordinary ability" through sustained national or international acclaim. Since we only have LinkedIn data, focus on these LinkedIn-specific criteria:
 
 Key LinkedIn-based O-1 criteria to evaluate:
-1. **Professional Seniority**: Senior roles, leadership positions, C-level titles, founding roles
+1. **Professional Seniority**: CRITICAL - Use the seniority classification provided (Junior/Senior/Executive/VP)
 2. **Company Prestige**: Work at top-tier companies (FAANG, unicorns, Fortune 500, prestigious startups)
-3. **Career Progression**: Rapid advancement, increasing responsibilities, salary progression indicators
+3. **Career Progression**: Rapid advancement, increasing responsibilities, clear progression through seniority levels
 4. **Professional Network**: High connection count, recommendations from senior professionals
 5. **Skills & Expertise**: Specialized skills, certifications, technical expertise relevant to field
 
+**SENIORITY LEVEL SCORING (Most Important Factor):**
+- **VP Level (9-10 points)**: CTO, CEO, Founder, VP, Chief Officer, Head of Department
+- **Executive Level (7-8 points)**: Director, Principal, Distinguished Engineer, Engineering Manager
+- **Senior Level (4-6 points)**: Senior Engineer, Staff Engineer, Senior Specialist, Senior Consultant  
+- **Junior Level (1-3 points)**: Engineer, Analyst, Coordinator, Associate, Entry-level roles
+
 Assess each criterion on a scale of 1-10 based on what's visible in LinkedIn:
-- **Professional Seniority**: VP, Director, CTO, Founder, Principal, Senior titles
+- **Professional Seniority**: Use the provided seniority analysis - this is pre-calculated and crucial
 - **Company Prestige**: Google, Meta, Apple, Microsoft, OpenAI, top startups, well-known brands
 - **Career Progression**: Multiple promotions, increasing scope, job title evolution
 - **Professional Network**: 500+ connections, recommendations from executives/leaders
@@ -121,21 +200,33 @@ Respond in JSON format with the following structure:
         accomplishments = profile_data.get("accomplishments", {})
         recommendations = profile_data.get("recommendations", [])
         
+        # Classify seniority level for current role
+        current_title = basic_info.get('headline', 'N/A')
+        current_company = basic_info.get('current_company', 'N/A')
+        seniority_level, seniority_score, seniority_reasoning = self.classify_seniority_level(current_title, current_company)
+        
         prompt = f"""Please assess the following professional's O-1 visa eligibility based on LinkedIn data:
 
 **BASIC INFORMATION:**
 - Name: {basic_info.get('name', 'N/A')}
-- Current Title: {basic_info.get('headline', 'N/A')}
+- Current Title: {current_title}
+- **SENIORITY LEVEL: {seniority_level} (Score: {seniority_score}/10)**
+- **Seniority Analysis: {seniority_reasoning}**
 - Location: {basic_info.get('location', 'N/A')}
 - Professional Summary: {basic_info.get('summary', 'N/A')[:300]}...
 - LinkedIn Connections: {basic_info.get('connections_count', 0)}
-- Current Company: {basic_info.get('current_company', 'N/A')}
+- Current Company: {current_company}
 
-**PROFESSIONAL EXPERIENCE (Focus on seniority and company prestige):**"""
+**PROFESSIONAL EXPERIENCE (Focus on seniority progression and company prestige):**"""
         
         for i, exp in enumerate(experience[:5], 1):  # Limit to top 5 experiences
+            # Analyze seniority for each role
+            exp_title = exp.get('title', 'N/A')
+            exp_company = exp.get('company', 'N/A')
+            exp_seniority, exp_score, _ = self.classify_seniority_level(exp_title, exp_company)
+            
             prompt += f"""
-{i}. {exp.get('title', 'N/A')} at {exp.get('company', 'N/A')}
+{i}. {exp_title} at {exp_company} - [{exp_seniority} Level: {exp_score}/10]
    Duration: {exp.get('start_date', 'N/A')} - {exp.get('end_date', 'Present')}
    Location: {exp.get('location', 'N/A')}
    Description: {exp.get('description', 'N/A')[:500]}..."""
