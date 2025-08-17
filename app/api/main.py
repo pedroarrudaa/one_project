@@ -210,11 +210,13 @@ def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
         if profile.gpt_assessment and "recommendation" in profile.gpt_assessment:
             recommendation = profile.gpt_assessment["recommendation"]
         
-        # Extract seniority and social influence info from LinkedIn data
+        # Extract seniority, social influence, and GitHub info from data
         seniority_level = None
         current_title = None
         social_influence = None
+        github_impact = None
         follower_counts = {}
+        github_metrics = {}
         
         if profile.linkedin_data:
             basic_info = profile.linkedin_data.get("basic_info", {})
@@ -229,6 +231,12 @@ def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
             influence_score, influence_analysis, follower_breakdown = gpt_service.analyze_social_influence(profile.linkedin_data)
             social_influence = influence_analysis
             follower_counts = follower_breakdown
+            
+            # Extract GitHub data if available
+            github_data = profile.linkedin_data.get("github_data")
+            if github_data:
+                github_impact = github_data.get("analysis_summary", "GitHub data available")
+                github_metrics = github_data.get("metrics", {})
         
         rankings.append(RankingEntry(
             rank=rank,
@@ -236,7 +244,9 @@ def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
             seniority_level=seniority_level,
             current_title=current_title,
             social_influence=social_influence,
+            github_impact=github_impact,
             follower_counts=follower_counts,
+            github_metrics=github_metrics,
             social_links=profile.social_links or {},
             email=profile.email,
             evidence=profile.o1_evidence or {},

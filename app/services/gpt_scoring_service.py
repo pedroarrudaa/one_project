@@ -155,6 +155,32 @@ class GPTScoringService:
         
         return score, analysis, followers
     
+    async def analyze_github_impact(self, github_url: str) -> Tuple[int, str, Dict[str, Any]]:
+        """
+        Analyze GitHub impact for O-1 assessment.
+        
+        Args:
+            github_url: GitHub profile URL
+            
+        Returns:
+            Tuple of (github_score_1_to_10, analysis_summary, github_metrics)
+        """
+        try:
+            from app.services.github_analytics_service import GitHubAnalyticsService
+            
+            github_service = GitHubAnalyticsService()
+            analysis = await github_service.analyze_github_profile(github_url)
+            
+            score = analysis.get('impact_score', 1)
+            summary = analysis.get('analysis_summary', 'No GitHub analysis')
+            metrics = analysis.get('metrics', {})
+            
+            return score, summary, metrics
+            
+        except Exception as e:
+            logger.error(f"GitHub analysis failed: {str(e)}")
+            return 1, "GitHub analysis failed", {}
+    
     async def assess_o1_compatibility(self, profile_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Assess O-1 visa compatibility using GPT-4o-mini analysis.
@@ -215,7 +241,8 @@ Key LinkedIn-based O-1 criteria to evaluate:
 2. **Company Prestige**: Work at top-tier companies (FAANG, unicorns, Fortune 500, prestigious startups)
 3. **Career Progression**: Rapid advancement, increasing responsibilities, clear progression through seniority levels
 4. **Professional Network**: High connection count, recommendations from senior professionals
-5. **Social Influence & Recognition**: IMPORTANT - Use the social influence analysis provided (followers, reach, online presence)
+5. **Social Influence & Recognition**: IMPORTANT - Use the social influence analysis provided (LinkedIn followers, reach)
+6. **Technical Impact & Open Source**: CRITICAL - Use GitHub analysis provided (stars, repositories, contributions)
 
 **SENIORITY LEVEL SCORING (Most Important Factor):**
 - **VP Level (9-10 points)**: CTO, CEO, Founder, VP, Chief Officer, Head of Department
@@ -232,13 +259,21 @@ Key LinkedIn-based O-1 criteria to evaluate:
 - **Some Influence (5 points)**: 1K+ total reach - Active professional presence
 - **Limited Influence (1-4 points)**: <1K total reach - Basic or minimal presence
 
-Assess each criterion on a scale of 1-10 based on what's visible in LinkedIn:
+**GITHUB IMPACT SCORING (Technical Excellence Factor):**
+- **GitHub Superstar (9-10 points)**: 5K+ stars, 1K+ followers - Major open source contributor
+- **Major Contributor (8 points)**: 1K+ stars, 500+ followers - Significant technical impact
+- **Notable Developer (7 points)**: 500+ stars, 100+ followers - Well-recognized projects
+- **Active Developer (6 points)**: 100+ stars, 50+ followers - Quality contributions
+- **Regular User (5 points)**: 10+ stars, active repos - Consistent development
+- **Casual User (1-4 points)**: <10 stars or minimal activity - Basic presence
+
+Assess each criterion on a scale of 1-10 based on what's visible in LinkedIn AND GitHub:
 - **Professional Seniority**: Use the provided seniority analysis - this is pre-calculated and crucial
 - **Company Prestige**: Google, Meta, Apple, Microsoft, OpenAI, top startups, well-known brands
 - **Social Influence & Recognition**: Use the provided social influence analysis - shows industry recognition
 - **Career Progression**: Multiple promotions, increasing scope, job title evolution
 - **Professional Network**: 500+ connections, recommendations from executives/leaders
-- **Skills & Expertise**: Advanced technical skills, industry certifications, specialized knowledge
+- **Technical Impact & Open Source**: Use the provided GitHub analysis - stars, repositories, technical contributions
 
 Respond in JSON format with the following structure:
 {
@@ -248,14 +283,14 @@ Respond in JSON format with the following structure:
     "company_prestige": float (1-10),
     "career_progression": float (1-10),
     "professional_network": float (1-10),
-    "skills_expertise": float (1-10)
+    "technical_impact": float (1-10)
   },
   "evidence": {
     "professional_seniority": [list of specific evidence from LinkedIn],
     "company_prestige": [list of specific evidence from LinkedIn],
     "career_progression": [list of specific evidence from LinkedIn],
     "professional_network": [list of specific evidence from LinkedIn],
-    "skills_expertise": [list of specific evidence from LinkedIn]
+    "technical_impact": [list of specific evidence from GitHub - stars, repos, contributions]
   },
   "strengths": [list of key strengths visible on LinkedIn],
   "weaknesses": [list of areas that appear weak on LinkedIn],
@@ -282,6 +317,18 @@ Respond in JSON format with the following structure:
         # Analyze social influence
         influence_score, influence_analysis, follower_breakdown = self.analyze_social_influence(profile_data)
         
+        # Analyze GitHub impact if available
+        github_score = 1
+        github_analysis = "No GitHub profile available"
+        github_metrics = {}
+        
+        # Check if GitHub data was provided
+        if 'github_data' in profile_data and profile_data['github_data']:
+            github_data = profile_data['github_data']
+            github_score = github_data.get('impact_score', 1)
+            github_analysis = github_data.get('analysis_summary', 'GitHub analysis available')
+            github_metrics = github_data.get('metrics', {})
+        
         prompt = f"""Please assess the following professional's O-1 visa eligibility based on LinkedIn data:
 
 **BASIC INFORMATION:**
@@ -290,6 +337,7 @@ Respond in JSON format with the following structure:
 - **SENIORITY LEVEL: {seniority_level} (Score: {seniority_score}/10)**
 - **Seniority Analysis: {seniority_reasoning}**
 - **SOCIAL INFLUENCE: {influence_analysis} (Score: {influence_score}/10)**
+- **GITHUB IMPACT: {github_analysis} (Score: {github_score}/10)**
 - Location: {basic_info.get('location', 'N/A')}
 - Professional Summary: {basic_info.get('summary', 'N/A')[:300]}...
 - Current Company: {current_company}
@@ -297,9 +345,16 @@ Respond in JSON format with the following structure:
 **SOCIAL MEDIA REACH & INFLUENCE:**
 - LinkedIn Connections: {follower_breakdown['linkedin_connections']:,}
 - LinkedIn Followers: {follower_breakdown['linkedin_followers']:,}
-- Twitter Followers: {follower_breakdown['twitter_followers']:,} (if available)
-- GitHub Followers: {follower_breakdown['github_followers']:,} (if available)
-- **Total Social Reach: {follower_breakdown['linkedin_connections'] + follower_breakdown['linkedin_followers']:,}**
+- GitHub Followers: {github_metrics.get('followers', 0):,}
+- **GitHub Impact**: {github_metrics.get('total_stars', 0):,} stars across {github_metrics.get('original_repos', 0)} original repos ({github_metrics.get('public_repos', 0)} total repos)
+- **Total Social Reach: {follower_breakdown['linkedin_connections'] + follower_breakdown['linkedin_followers'] + github_metrics.get('followers', 0):,}**
+
+**GITHUB TECHNICAL EXCELLENCE:**
+- Total Stars Received: {github_metrics.get('total_stars', 0):,}
+- Total Forks: {github_metrics.get('total_forks', 0):,}
+- Original Repositories: {github_metrics.get('original_repos', 0)}
+- GitHub Followers: {github_metrics.get('followers', 0):,}
+- **GitHub Impact Level: {github_analysis}**
 
 **PROFESSIONAL EXPERIENCE (Focus on seniority progression and company prestige):**"""
         
@@ -410,14 +465,14 @@ Provide a realistic O-1 assessment based ONLY on what's visible in this LinkedIn
                 "company_prestige": 0.0,
                 "career_progression": 0.0,
                 "professional_network": 0.0,
-                "skills_expertise": 0.0
+                "technical_impact": 0.0
             },
             "evidence": {
                 "professional_seniority": [],
                 "company_prestige": [],
                 "career_progression": [],
                 "professional_network": [],
-                "skills_expertise": []
+                "technical_impact": []
             },
             "strengths": [],
             "weaknesses": ["Assessment failed due to technical error"],

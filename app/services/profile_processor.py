@@ -11,6 +11,7 @@ from app.models.profile import Profile, ProcessingLog
 from app.services.linkedin_discovery_service import LinkedInDiscoveryService
 from app.services.brightdata_service import BrightDataService
 from app.services.gpt_scoring_service import GPTScoringService
+from app.services.github_analytics_service import GitHubAnalyticsService
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class ProfileProcessor:
         self.linkedin_discovery = LinkedInDiscoveryService()
         self.brightdata = BrightDataService()
         self.gpt_scoring = GPTScoringService()
+        self.github_analytics = GitHubAnalyticsService()
     
     async def process_profile(self, profile_id: str) -> Dict[str, Any]:
         """
@@ -64,15 +66,18 @@ class ProfileProcessor:
             # Step 3: Discover additional social links
             social_links = await self._discover_social_links(profile, linkedin_url, db)
             
-            # Step 4: GPT Assessment
-            assessment = await self._assess_with_gpt(profile, linkedin_data, db)
+            # Step 4: GitHub Analytics (if GitHub URL available)
+            github_data = await self._analyze_github_profile(profile, social_links, db)
+            
+            # Step 5: GPT Assessment (now includes GitHub data)
+            assessment = await self._assess_with_gpt(profile, linkedin_data, github_data, db)
             if not assessment or assessment.get("error"):
                 return await self._handle_processing_error(
                     profile, db, "gpt_assessment", "GPT assessment failed"
                 )
             
-            # Step 5: Update profile with results
-            await self._save_results(profile, linkedin_data, social_links, assessment, db)
+            # Step 6: Update profile with results
+            await self._save_results(profile, linkedin_data, social_links, github_data, assessment, db)
             
             # Step 6: Update rankings
             await self._update_rankings(db)
@@ -175,12 +180,52 @@ class ProfileProcessor:
             self._log_step(db, profile.id, "social_discovery", "failed", str(e))
             return {"linkedin": linkedin_url}  # At least return LinkedIn
     
-    async def _assess_with_gpt(self, profile: Profile, linkedin_data: Dict[str, Any], db: Session) -> Optional[Dict[str, Any]]:
+    async def _analyze_github_profile(self, profile: Profile, social_links: Dict[str, str], db: Session) -> Optional[Dict[str, Any]]:
+        """Analyze GitHub profile if available."""
+        try:
+            self._log_step(db, profile.id, "github_analysis", "started", "Analyzing GitHub profile")
+            
+            github_url = social_links.get('github')
+            if not github_url:
+                self._log_step(db, profile.id, "github_analysis", "completed", 
+                             "No GitHub URL available", {"github_data": None})
+                return None
+            
+            logger.info(f"Analyzing GitHub for: {profile.name}")
+            github_data = await self.github_analytics.analyze_github_profile(github_url)
+            
+            if github_data and github_data.get('impact_score', 0) > 1:
+                self._log_step(db, profile.id, "github_analysis", "completed", 
+                             "GitHub analysis successful", {
+                                 "username": github_data.get('username'),
+                                 "impact_score": github_data.get('impact_score'),
+                                 "total_stars": github_data.get('metrics', {}).get('total_stars', 0),
+                                 "followers": github_data.get('metrics', {}).get('followers', 0)
+                             })
+                return github_data
+            else:
+                self._log_step(db, profile.id, "github_analysis", "completed", 
+                             "No significant GitHub activity found")
+                return None
+            
+        except Exception as e:
+            logger.error(f"GitHub analysis failed for {profile.name}: {str(e)}")
+            self._log_step(db, profile.id, "github_analysis", "failed", 
+                         f"GitHub analysis error: {str(e)}")
+            return None
+    
+    async def _assess_with_gpt(self, profile: Profile, linkedin_data: Dict[str, Any], 
+                              github_data: Optional[Dict[str, Any]], db: Session) -> Optional[Dict[str, Any]]:
         """Assess profile using GPT-4o-mini."""
         try:
             self._log_step(db, profile.id, "gpt_assessment", "started", "Starting GPT assessment")
             
-            assessment = await self.gpt_scoring.assess_o1_compatibility(linkedin_data)
+            # Combine LinkedIn and GitHub data for assessment
+            combined_data = linkedin_data.copy()
+            if github_data:
+                combined_data['github_data'] = github_data
+            
+            assessment = await self.gpt_scoring.assess_o1_compatibility(combined_data)
             
             if assessment and not assessment.get("error"):
                 self._log_step(db, profile.id, "gpt_assessment", "completed", 
@@ -196,7 +241,8 @@ class ProfileProcessor:
             return None
     
     async def _save_results(self, profile: Profile, linkedin_data: Dict[str, Any], 
-                          social_links: Dict[str, str], assessment: Dict[str, Any], db: Session):
+                          social_links: Dict[str, str], github_data: Optional[Dict[str, Any]], 
+                          assessment: Dict[str, Any], db: Session):
         """Save all processing results to the profile."""
         try:
             # Update profile with all results
@@ -207,6 +253,10 @@ class ProfileProcessor:
             profile.final_score = assessment.get("overall_score", 0.0)
             profile.processing_status = "completed"
             profile.updated_at = datetime.utcnow()
+            
+            # Add GitHub data to linkedin_data for storage
+            if github_data:
+                profile.linkedin_data['github_data'] = github_data
             
             db.commit()
             

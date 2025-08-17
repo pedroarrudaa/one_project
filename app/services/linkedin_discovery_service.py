@@ -192,19 +192,41 @@ class LinkedInDiscoveryService:
                     social_links["twitter"] = url
                     break
             
-            # Search for GitHub profile
-            github_query = f'"{name}" site:github.com'
-            github_response = self.client.search(
-                query=github_query,
-                search_depth="basic",
-                max_results=3,
-                include_raw_content=False
-            )
+            # Search for GitHub profile with improved query
+            # Try multiple search strategies for better GitHub discovery
+            github_queries = [
+                f'"{name}" site:github.com',
+                f'"{name}" github profile',
+                f'"{name.split()[0]}" site:github.com'  # Try first name only
+            ]
             
-            for result in github_response.get("results", []):
-                url = result.get("url", "")
-                if "github.com/" in url and "/blob/" not in url and "/issues/" not in url:
-                    social_links["github"] = url
+            if email and "@" in email:
+                username_part = email.split("@")[0]
+                github_queries.append(f'"{username_part}" site:github.com')
+            
+            for query in github_queries:
+                github_response = self.client.search(
+                    query=query,
+                    search_depth="basic",
+                    max_results=5,
+                    include_raw_content=False
+                )
+                
+                for result in github_response.get("results", []):
+                    url = result.get("url", "")
+                    if ("github.com/" in url and 
+                        "/blob/" not in url and 
+                        "/issues/" not in url and 
+                        "/pull/" not in url and
+                        "/commit/" not in url):
+                        # Prefer URLs that contain name parts
+                        name_parts = name.lower().split()
+                        url_lower = url.lower()
+                        if any(part in url_lower for part in name_parts if len(part) > 2):
+                            social_links["github"] = url
+                            break
+                
+                if "github" in social_links:
                     break
             
             if linkedin_url:

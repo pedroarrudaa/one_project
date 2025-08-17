@@ -80,7 +80,9 @@ class RankingEntry(BaseModel):
     seniority_level: Optional[str] = Field(None, description="Professional seniority: Junior/Senior/Executive/VP")
     current_title: Optional[str] = Field(None, description="Current job title")
     social_influence: Optional[str] = Field(None, description="Social influence level and reach")
+    github_impact: Optional[str] = Field(None, description="GitHub impact level and technical contributions")
     follower_counts: Optional[Dict[str, int]] = Field(default_factory=dict, description="Follower counts by platform")
+    github_metrics: Optional[Dict[str, int]] = Field(default_factory=dict, description="GitHub stars, repos, followers")
     social_links: Dict[str, str] = Field(default_factory=dict)
     email: str
     evidence: Dict[str, List[str]] = Field(default_factory=dict)
