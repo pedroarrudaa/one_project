@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     tavily_api_key: str  # For LinkedIn discovery only
     brightdata_api_key: str  # For LinkedIn scraping
+    github_token: str  # GitHub API token for enhanced data collection
     
     # Application
     debug: bool = True
@@ -24,18 +25,19 @@ class Settings(BaseSettings):
     linkedin_discovery_enabled: bool = True
     max_linkedin_search_results: int = 5
     
-    # BrightData Settings
-    brightdata_timeout: int = 300  # seconds (5 minutes)
-    brightdata_retries: int = 3
+    # BrightData Settings (Enhanced to avoid timeouts)
+    brightdata_timeout: int = 900  # seconds (15 minutes)
+    brightdata_retries: int = 3    # Automatic retry attempts
+    brightdata_retry_delay: int = 30  # seconds between retries
     
     # GPT-4o-mini Settings
     gpt_model: str = "gpt-4o-mini"
     gpt_temperature: float = 0.3
     gpt_max_tokens: int = 2000
     
-    # Processing Settings
-    max_concurrent_profiles: int = 5
-    processing_timeout: int = 300  # seconds per profile
+    # Processing Settings (Enhanced for individual processing)
+    max_concurrent_profiles: int = 1  # Process one at a time
+    processing_timeout: int = 1200  # seconds per profile (20 minutes)
     
     class Config:
         env_file = ".env"

@@ -27,43 +27,62 @@ class TavilyService:
             LinkedIn profile URL if found, None otherwise
         """
         try:
-            # Construct search query for LinkedIn
-            query_parts = [f'"{name}"', "site:linkedin.com/in/"]
+            # Multiple search strategies for better LinkedIn discovery
+            search_strategies = []
             
+            # Strategy 1: Name + company domain
             if email and "@" in email:
-                # Add company domain if available
                 domain = email.split("@")[1]
-                query_parts.append(f'"{domain}"')
+                company = domain.split(".")[0]  # Extract company name
+                search_strategies.append(f'"{name}" "{company}" site:linkedin.com/in/')
+                search_strategies.append(f'"{name}" site:linkedin.com/in/ "{domain}"')
             
-            if additional_info:
-                query_parts.append(f'"{additional_info}"')
+            # Strategy 2: Just name
+            search_strategies.append(f'"{name}" site:linkedin.com/in/')
             
-            query = " ".join(query_parts)
+            # Strategy 3: Name variations
+            name_parts = name.split()
+            if len(name_parts) >= 2:
+                first_name = name_parts[0]
+                last_name = name_parts[-1]
+                # Try concatenated version (like "shailimonchik")
+                search_strategies.append(f'"{first_name.lower()}{last_name.lower()}" site:linkedin.com')
+                search_strategies.append(f'"{first_name}{last_name}" site:linkedin.com/in/')
             
-            logger.info(f"Searching LinkedIn for: {query}")
+            # Strategy 4: Broader search without site restriction
+            search_strategies.append(f'"{name}" linkedin profile')
             
-            # Search using Tavily
-            response = self.client.search(
-                query=query,
-                search_depth="basic",
-                max_results=settings.max_linkedin_search_results,
-                include_raw_content=False
-            )
+            # Try each strategy until we find a LinkedIn profile
+            for strategy_num, query in enumerate(search_strategies, 1):
+                logger.info(f"LinkedIn search strategy {strategy_num}: {query}")
+                
+                try:
+                    # Search using Tavily
+                    response = self.client.search(
+                        query=query,
+                        search_depth="basic",
+                        max_results=settings.max_linkedin_search_results,
+                        include_raw_content=False
+                    )
+                    
+                    # Extract LinkedIn URLs from results
+                    linkedin_urls = []
+                    for result in response.get("results", []):
+                        url = result.get("url", "")
+                        if "linkedin.com/in/" in url and url not in linkedin_urls:
+                            linkedin_urls.append(url)
+                    
+                    if linkedin_urls:
+                        # Return the first (most relevant) LinkedIn URL
+                        best_url = linkedin_urls[0]
+                        logger.info(f"Found LinkedIn profile with strategy {strategy_num}: {best_url}")
+                        return best_url
+                        
+                except Exception as e:
+                    logger.warning(f"Strategy {strategy_num} failed: {e}")
+                    continue
             
-            # Extract LinkedIn URLs from results
-            linkedin_urls = []
-            for result in response.get("results", []):
-                url = result.get("url", "")
-                if "linkedin.com/in/" in url and url not in linkedin_urls:
-                    linkedin_urls.append(url)
-            
-            if linkedin_urls:
-                # Return the first (most relevant) LinkedIn URL
-                best_url = linkedin_urls[0]
-                logger.info(f"Found LinkedIn profile: {best_url}")
-                return best_url
-            
-            logger.warning(f"No LinkedIn profile found for: {name}")
+            logger.warning(f"No LinkedIn profile found for: {name} after trying {len(search_strategies)} strategies")
             return None
             
         except Exception as e:

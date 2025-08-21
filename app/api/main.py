@@ -24,6 +24,7 @@ from app.schemas import (
 )
 from app.models import Profile, ProcessingLog
 from app.services.profile_processor import ProfileProcessor
+
 from pathlib import Path
 
 # Initialize FastAPI app
@@ -191,7 +192,7 @@ def get_processing_logs(profile_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/rankings", response_model=RankingResponse)
-def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
+def get_rankings(limit: int = 500, db: Session = Depends(get_db)):
     """Get ranked profiles based on O-1 assessment scores."""
     profiles = db.query(Profile).filter(
         Profile.final_score.isnot(None),
@@ -223,7 +224,7 @@ def get_rankings(limit: int = 50, db: Session = Depends(get_db)):
             current_title = basic_info.get("headline", "")
             
             # Use GPT service to classify seniority and social influence
-            from app.services.gpt_scoring_service import GPTScoringService
+            from app.services.scoring_v1 import GPTScoringService
             gpt_service = GPTScoringService()
             seniority_level, _, _ = gpt_service.classify_seniority_level(current_title, basic_info.get("current_company", ""))
             
@@ -298,6 +299,7 @@ def get_system_stats(db: Session = Depends(get_db)):
         failed=failed,
         completion_rate=completion_rate
     )
+
 
 
 @app.get("/healthz")

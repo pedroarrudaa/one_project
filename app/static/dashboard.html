@@ -134,6 +134,26 @@
       color: var(--muted);
       margin-top: 4px;
     }
+    .contact-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .contact-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    .contact-btn:active {
+      transform: translateY(0);
+    }
     .rankings-table {
       width: 100%;
       border-collapse: collapse;
@@ -198,6 +218,16 @@
     }
     .evidence-item {
       margin-bottom: 2px;
+    }
+    .social-summary {
+      background: rgba(108,140,255,0.1);
+      border: 1px solid rgba(108,140,255,0.2);
+      border-radius: 4px;
+      padding: 4px 6px;
+      margin-bottom: 4px;
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 500;
     }
     .status-badge {
       padding: 2px 6px;
@@ -319,12 +349,13 @@
                 <th>Email</th>
                 <th>Score</th>
                 <th>Evidence Summary</th>
+                <th>Contact Profile</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody id="rankingsBody">
               <tr>
-                <td colspan="7" style="text-align: center; color: var(--muted); padding: 40px;">
+                <td colspan="8" style="text-align: center; color: var(--muted); padding: 40px;">
                   No rankings available. Upload and process profiles to see results.
                 </td>
               </tr>
@@ -464,28 +495,411 @@
     // Load rankings
     async function loadRankings() {
       try {
-        const response = await fetch('/rankings');
+        console.log('Loading rankings...');
+        const response = await fetch('/rankings?limit=500');
+        console.log('Response status:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('Rankings data received:', data.rankings?.length || 0, 'profiles');
           displayRankings(data.rankings);
+        } else {
+          console.error('Rankings response not ok:', response.status);
         }
       } catch (error) {
         console.error('Failed to load rankings:', error);
       }
     }
 
+    // Generate personalized email for outreach
+    function generatePersonalizedEmail(profile) {
+      const firstName = profile.full_name.split(' ')[0];
+      const topSignals = generateTopSignals(profile);
+      
+      const subject = `O-1 Visa Opportunity for ${firstName}`;
+      
+      const emailBody = `Hi ${firstName},
+
+I'm Sahar, an AI founder who came to the U.S. on an O-1 visa and later obtained an EB-1 Green Card. Both are non-quota visas designed for experts with extraordinary ability.
+
+Your profile — ${topSignals} — suggests you could be a strong candidate across multiple O-1/EB-1 criteria. Many researchers aren't aware of these options, yet they can be life-changing, especially given today's immigration uncertainties. Importantly, spouses are also allowed to work on these visas.
+
+Alongside my own journey, I run a community for O-1/EB-1 applicants, publish a blog for AI developers and researchers, and organize events to connect and grow the AI community. My goal is to make this process more transparent and supportive for others.
+
+I've been through this process myself and now try to make it easier for others, including connecting them with a specialized legal expert. To assess fit, please complete his short form (takes <5 minutes).
+
+Looking forward,
+Sahar
+linkedin.com/in/sahar-mor`;
+
+      // Create mailto link with hidden links in HTML version
+      const htmlBody = emailBody
+        .replace('community for O-1/EB-1 applicants', '<a href="https://saharmortech.substack.com">community for O-1/EB-1 applicants</a>')
+        .replace('publish a blog', '<a href="https://saharmortech.substack.com">publish a blog</a>')
+        .replace('organize events', '<a href="https://lu.ma/saharmortech">organize events</a>')
+        .replace('complete his short form', '<a href="https://airtable.com/shrYourFormID">complete his short form</a>');
+      
+      return {
+        subject: subject,
+        body: emailBody,
+        htmlBody: htmlBody,
+        mailto: `mailto:${profile.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`
+      };
+    }
+    
+    // Generate top signals for each profile
+    function generateTopSignals(profile) {
+      const signals = [];
+      
+      // Add company prestige
+      if (profile.evidence && profile.evidence.company_prestige) {
+        const company = profile.evidence.company_prestige[0];
+        if (company && (company.includes('Google') || company.includes('Meta') || company.includes('Apple') || 
+                       company.includes('Microsoft') || company.includes('Amazon') || company.includes('NVIDIA'))) {
+          signals.push('top-tier tech company experience');
+        }
+      }
+      
+      // Add education prestige
+      if (profile.evidence && profile.evidence.professional_seniority) {
+        const education = profile.evidence.professional_seniority.find(item => 
+          item.includes('Stanford') || item.includes('MIT') || item.includes('Harvard') || 
+          item.includes('Carnegie Mellon') || item.includes('Berkeley'));
+        if (education) {
+          signals.push('prestigious university background');
+        }
+      }
+      
+      // Add high score indicator
+      if (profile.score >= 7.0) {
+        signals.push('exceptional professional achievements');
+      } else if (profile.score >= 6.0) {
+        signals.push('strong professional background');
+      } else if (profile.score >= 5.0) {
+        signals.push('solid professional experience');
+      }
+      
+      // Add LinkedIn network strength
+      if (profile.follower_counts) {
+        const totalReach = (profile.follower_counts.linkedin_connections || 0) + 
+                          (profile.follower_counts.linkedin_followers || 0);
+        if (totalReach >= 5000) {
+          signals.push('strong professional network');
+        } else if (totalReach >= 1000) {
+          signals.push('growing professional network');
+        }
+      }
+      
+      // Add bonus achievements
+      if (profile.evidence && profile.evidence.bonus_achievements && profile.evidence.bonus_achievements.length > 0) {
+        signals.push('notable achievements and recognition');
+      }
+      
+      // Default if no specific signals
+      if (signals.length === 0) {
+        signals.push('technical background and professional experience');
+      }
+      
+      return signals.join(', ');
+    }
+    
+    // Simplified email function using data attributes
+    function openPersonalizedEmailSimple(button) {
+      try {
+        const email = button.dataset.email;
+        const fullName = button.dataset.name;
+        const score = parseFloat(button.dataset.score);
+        const company = button.dataset.company;
+        
+        const firstName = fullName.split(' ')[0];
+        
+        // Generate simple top signals
+        const signals = [];
+        if (score >= 7.0) signals.push('exceptional professional achievements');
+        else if (score >= 6.0) signals.push('strong professional background');
+        else if (score >= 5.0) signals.push('solid professional experience');
+        
+        if (company && (company.includes('Google') || company.includes('Meta') || company.includes('Apple') || 
+                       company.includes('Microsoft') || company.includes('Amazon') || company.includes('NVIDIA'))) {
+          signals.push('top-tier tech company experience');
+        }
+        
+        signals.push('strong LinkedIn professional network');
+        
+        const topSignals = signals.join(', ');
+        
+        const subject = `O-1 Visa Opportunity for ${firstName}`;
+        
+        const emailBody = `Hi ${firstName},
+
+I'm Sahar, an AI founder who came to the U.S. on an O-1 visa and later obtained an EB-1 Green Card. Both are non-quota visas designed for experts with extraordinary ability.
+
+Your profile — ${topSignals} — suggests you could be a strong candidate across multiple O-1/EB-1 criteria. Many researchers aren't aware of these options, yet they can be life-changing, especially given today's immigration uncertainties. Importantly, spouses are also allowed to work on these visas.
+
+Alongside my own journey, I run a community for O-1/EB-1 applicants, publish a blog for AI developers and researchers, and organize events to connect and grow the AI community. My goal is to make this process more transparent and supportive for others.
+
+I've been through this process myself and now try to make it easier for others, including connecting them with a specialized legal expert. To assess fit, please complete his short form (takes <5 minutes).
+
+Looking forward,
+Sahar
+linkedin.com/in/sahar-mor`;
+
+        // Create two versions: clean text for email client, HTML for preview
+        const cleanEmailBody = emailBody
+          .replace('community for O-1/EB-1 applicants', 'community for O-1/EB-1 applicants (https://discord.com/invite/9jk6fhME4V)')
+          .replace('publish a blog', 'publish a blog (https://www.aitidbits.ai/)')
+          .replace('organize events', 'organize events (https://lu.ma/genai-sf)')
+          .replace('complete his short form', 'complete his short form (https://forms.gle/n4Gyr7L1SoBY97yGA)');
+        
+        const htmlPreviewBody = emailBody
+          .replace('community for O-1/EB-1 applicants', '<a href="https://discord.com/invite/9jk6fhME4V" style="color: #667eea; text-decoration: none;">community for O-1/EB-1 applicants</a>')
+          .replace('publish a blog', 'publish a <a href="https://www.aitidbits.ai/" style="color: #667eea; text-decoration: none;">blog</a>')
+          .replace('organize events', '<a href="https://lu.ma/genai-sf" style="color: #667eea; text-decoration: none;">organize events</a>')
+          .replace('complete his short form', 'complete his <a href="https://forms.gle/n4Gyr7L1SoBY97yGA" style="color: #667eea; text-decoration: none;">short form</a>');
+        
+        // Open email client with clean text (links as URLs)
+        const mailto = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(cleanEmailBody)}`;
+        window.open(mailto);
+        
+        // Show preview modal with HTML version (clickable links)
+        showEmailPreviewWithClickableLinks(subject, cleanEmailBody, htmlPreviewBody, email);
+        
+      } catch (error) {
+        console.error('Error generating email:', error);
+        alert('Error generating email. Please try again.');
+      }
+    }
+    
+    // Show email preview modal
+    function showEmailPreview(emailData) {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.8); z-index: 1000; display: flex; 
+        align-items: center; justify-content: center; padding: 20px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: var(--card); border-radius: 12px; padding: 24px; 
+          max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto;
+          border: 1px solid var(--border);
+        ">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: var(--text);">📧 Personalized Email Preview</h3>
+            <button onclick="this.closest('div').parentElement.remove()" style="
+              background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);
+            ">×</button>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <strong>Subject:</strong> <span style="color: var(--primary);">${subject}</span>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <strong>Email Body:</strong>
+            <textarea readonly style="width: 100%; height: 300px; margin-top: 8px; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 13px; line-height: 1.4; resize: vertical;">${body}</textarea>
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button onclick="copyEmailToClipboard(this)" data-email-body="${body.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+              class="contact-btn" style="background: #28a745;">
+              📋 Copy Email
+            </button>
+            <button onclick="this.closest('div').parentElement.remove()" 
+              class="contact-btn" style="background: #6c757d;">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Close on background click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+    
+    // Simplified email preview
+    function showEmailPreviewSimple(subject, body, email) {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.8); z-index: 1000; display: flex; 
+        align-items: center; justify-content: center; padding: 20px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: var(--card); border-radius: 12px; padding: 24px; 
+          max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto;
+          border: 1px solid var(--border);
+        ">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: var(--text);">📧 Email Preview</h3>
+            <button onclick="this.closest('div').parentElement.remove()" style="
+              background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);
+            ">×</button>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <strong>To:</strong> <span style="color: var(--primary);">${email}</span>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <strong>Subject:</strong> <span style="color: var(--primary);">${subject}</span>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <strong>Message:</strong>
+            <textarea readonly style="
+              width: 100%; height: 300px; margin-top: 8px; padding: 12px;
+              background: var(--bg); border: 1px solid var(--border);
+              border-radius: 6px; color: var(--text); font-family: monospace;
+              font-size: 13px; line-height: 1.4; resize: vertical;
+            ">${body}</textarea>
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button onclick="navigator.clipboard.writeText(\`${body.replace(/`/g, '\\`')}\`); this.textContent='✅ Copied!'" 
+              class="contact-btn" style="background: #28a745;">
+              📋 Copy Email
+            </button>
+            <button onclick="this.closest('div').parentElement.remove()" 
+              class="contact-btn" style="background: #6c757d;">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Close on background click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+    
+    // Show email preview with clickable links
+    function showEmailPreviewWithClickableLinks(subject, plainBody, htmlBody, email) {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.8); z-index: 1000; display: flex; 
+        align-items: center; justify-content: center; padding: 20px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: var(--card); border-radius: 12px; padding: 24px; 
+          max-width: 700px; width: 100%; max-height: 85vh; overflow-y: auto;
+          border: 1px solid var(--border);
+        ">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: var(--text);">📧 Personalized Outreach Email</h3>
+            <button onclick="this.closest('div').parentElement.remove()" style="
+              background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);
+            ">×</button>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <strong>To:</strong> <span style="color: var(--primary);">${email}</span>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <strong>Subject:</strong> <span style="color: var(--primary);">${subject}</span>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <strong>📧 Email Preview:</strong>
+            <div style="
+              background: white; color: #333; padding: 16px; border-radius: 8px; 
+              border: 1px solid #ddd; font-family: Arial, sans-serif; line-height: 1.6;
+              max-height: 400px; overflow-y: auto;
+            ">${htmlBody.replace(/\\n/g, '<br><br>')}</div>
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button onclick="copyEmailText(this, 'plain')" 
+              data-text="${plainBody.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+              class="contact-btn" style="background: #28a745;">
+              📋 Copy
+            </button>
+            <button onclick="openGmailDirect(this)" 
+              data-email="${email}" 
+              data-subject="${subject.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" 
+              data-plain-body="${plainBody.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+              class="contact-btn" style="background: #ea4335;">
+              📧 Open Gmail
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Close on background click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+    
+    // Copy email text (plain or HTML)
+    function copyEmailText(button, type) {
+      try {
+        const text = button.dataset.text.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        navigator.clipboard.writeText(text);
+        const originalText = button.textContent;
+        button.textContent = '✅ Copied!';
+        setTimeout(() => {
+          button.textContent = originalText;
+        }, 2000);
+      } catch (error) {
+        console.error('Copy failed:', error);
+        button.textContent = '❌ Failed';
+      }
+    }
+    
+    // Open Gmail directly with clean text content
+    function openGmailDirect(button) {
+      try {
+        const email = button.dataset.email;
+        const subject = button.dataset.subject.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        const plainBody = button.dataset.plainBody.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainBody)}`;
+        window.open(gmailUrl, '_blank');
+        
+        button.textContent = '✅ Opened!';
+        setTimeout(() => {
+          button.textContent = '📧 Open Gmail';
+        }, 2000);
+      } catch (error) {
+        console.error('Error opening Gmail:', error);
+        button.textContent = '❌ Failed';
+      }
+    }
+
     // Display rankings
     function displayRankings(rankings) {
+      console.log('displayRankings called with:', rankings?.length || 0, 'rankings');
+      
       if (!rankings || rankings.length === 0) {
+        console.log('No rankings to display');
         rankingsBody.innerHTML = `
           <tr>
-            <td colspan="7" style="text-align: center; color: var(--muted); padding: 40px;">
+            <td colspan="8" style="text-align: center; color: var(--muted); padding: 40px;">
               No rankings available. Upload and process profiles to see results.
             </td>
           </tr>
         `;
         return;
       }
+      
+      console.log('Displaying', rankings.length, 'rankings');
 
       rankingsBody.innerHTML = rankings.map(ranking => `
         <tr>
@@ -509,8 +923,18 @@
           </td>
           <td>
             <div class="evidence-list">
-              ${formatEvidence(ranking.evidence)}
+              ${formatEvidence(ranking.evidence, ranking.follower_counts)}
             </div>
+          </td>
+          <td>
+            <button class="contact-btn" 
+              data-email="${ranking.email}" 
+              data-name="${ranking.full_name}" 
+              data-score="${ranking.score}" 
+              data-company="${ranking.evidence?.company_prestige?.[0] || 'N/A'}"
+              onclick="openPersonalizedEmailSimple(this)">
+              📧 Contact
+            </button>
           </td>
           <td>
             <span class="status-badge status-${ranking.processing_status}">${ranking.processing_status}</span>
@@ -533,20 +957,58 @@
       return 'score-low';
     }
 
-    function formatEvidence(evidence) {
-      if (!evidence || Object.keys(evidence).length === 0) {
-        return '<div style="color: var(--muted);">No evidence available</div>';
-      }
-      
-      const items = [];
-      Object.entries(evidence).forEach(([category, evidenceList]) => {
-        if (evidenceList && evidenceList.length > 0) {
-          items.push(`<strong>${category}:</strong> ${evidenceList.slice(0, 2).join(', ')}`);
+    function formatEvidence(evidence, followerCounts) {
+      try {
+        if (!evidence || Object.keys(evidence).length === 0) {
+          return '<div style="color: var(--muted);">No evidence available</div>';
         }
-      });
-      
-      return items.slice(0, 3).map(item => `<div class="evidence-item">${item}</div>`).join('');
+        
+        const items = [];
+        
+        // Add LinkedIn followers summary at the top (GitHub removed)
+        try {
+          const socialSummary = formatLinkedInSummary(followerCounts);
+          if (socialSummary) {
+            items.push(`<div class="social-summary">${socialSummary}</div>`);
+          }
+        } catch (e) {
+          console.warn('Error formatting LinkedIn summary:', e);
+        }
+        
+        // Add evidence items safely
+        try {
+          Object.entries(evidence).forEach(([category, evidenceList]) => {
+            if (evidenceList && Array.isArray(evidenceList) && evidenceList.length > 0) {
+              const safeList = evidenceList.slice(0, 2).map(item => String(item)).join(', ');
+              items.push(`<strong>${category}:</strong> ${safeList}`);
+            }
+          });
+        } catch (e) {
+          console.warn('Error formatting evidence:', e);
+          items.push('<div style="color: var(--muted);">Evidence format error</div>');
+        }
+        
+        return items.slice(0, 4).map(item => `<div class="evidence-item">${item}</div>`).join('');
+        
+      } catch (error) {
+        console.error('formatEvidence error:', error);
+        return '<div style="color: var(--muted);">Evidence unavailable</div>';
+      }
     }
+    
+    function formatLinkedInSummary(followerCounts) {
+      if (!followerCounts) return '';
+      
+      const connections = followerCounts.linkedin_connections || 0;
+      const followers = followerCounts.linkedin_followers || 0;
+      const total = connections + followers;
+      
+      if (total === 0) return '';
+      
+      return `LinkedIn Network: ${connections.toLocaleString()} connections + ${followers.toLocaleString()} followers = ${total.toLocaleString()} total reach`;
+    }
+
+    // formatSocialMediaSummary function completely removed
 
     function showMessage(text, type) {
       uploadMessage.className = `message ${type}`;

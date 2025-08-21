@@ -1,4 +1,4 @@
-"""GPT-4o-mini Intelligent Scoring Service for O-1 Visa Assessment."""
+"""GPT-4o-mini Intelligent Scoring Service for O-1 Visa Assessment (V1 - Legacy)."""
 
 import json
 import logging
@@ -93,30 +93,38 @@ class GPTScoringService:
     
     def analyze_social_influence(self, profile_data: Dict[str, Any]) -> Tuple[int, str, Dict[str, int]]:
         """
-        Analyze social media influence based on followers across platforms.
+        Analyze social media influence - LinkedIn only (simplified).
         
         Args:
-            profile_data: Complete profile data including social links and follower counts
+            profile_data: Dictionary containing LinkedIn data only
             
         Returns:
             Tuple of (influence_score_1_to_10, analysis_summary, follower_breakdown)
         """
         basic_info = profile_data.get("basic_info", {})
         
-        # Extract follower counts
-        linkedin_followers = basic_info.get("followers_count", 0)
-        linkedin_connections = basic_info.get("connections_count", 0)
+        # Extract LinkedIn follower counts only
+        linkedin_followers = basic_info.get("followers_count", 0) or 0
+        linkedin_connections = basic_info.get("connections_count", 0) or 0
         
-        # For now, we mainly have LinkedIn data from BrightData
-        # Twitter and GitHub followers would come from social_links if we had them
         followers = {
             "linkedin_followers": linkedin_followers,
-            "linkedin_connections": linkedin_connections,
-            "twitter_followers": 0,  # Would be populated if we had Twitter API
-            "github_followers": 0    # Would be populated if we had GitHub API
+            "linkedin_connections": linkedin_connections
         }
         
-        total_social_reach = linkedin_followers + linkedin_connections
+        # LinkedIn-only reach calculation with logarithmic scaling
+        reach_raw = linkedin_followers + linkedin_connections
+        
+        # Use logarithmic scaling adjusted for LinkedIn-only
+        import math
+        if reach_raw > 0:
+            # Adjusted formula for LinkedIn-only: more generous scaling
+            logarithmic_reach_score = min(10, max(0, 1.5 + 2.5 * math.log10(reach_raw + 50)))
+        else:
+            logarithmic_reach_score = 0
+        
+        total_social_reach = reach_raw
+        social_reach_score = logarithmic_reach_score
         
         # Scoring based on social reach (1-10 scale)
         if total_social_reach >= 50000:  # 50K+ = Influencer level
@@ -150,36 +158,13 @@ class GPTScoringService:
             score = 1
             level = "No Social Presence"
         
-        # Create detailed analysis
-        analysis = f"{level} - LinkedIn: {linkedin_connections:,} connections + {linkedin_followers:,} followers = {total_social_reach:,} total reach"
+        # Create simplified analysis - LinkedIn only
+        analysis = f"{level} - LinkedIn: {linkedin_connections:,} connections + {linkedin_followers:,} followers = {total_social_reach:,} total reach (Log Score: {social_reach_score:.1f}/10)"
         
-        return score, analysis, followers
+        # Return the logarithmic score for better scaling
+        return int(social_reach_score), analysis, followers
     
-    async def analyze_github_impact(self, github_url: str) -> Tuple[int, str, Dict[str, Any]]:
-        """
-        Analyze GitHub impact for O-1 assessment.
-        
-        Args:
-            github_url: GitHub profile URL
-            
-        Returns:
-            Tuple of (github_score_1_to_10, analysis_summary, github_metrics)
-        """
-        try:
-            from app.services.github_analytics_service import GitHubAnalyticsService
-            
-            github_service = GitHubAnalyticsService()
-            analysis = await github_service.analyze_github_profile(github_url)
-            
-            score = analysis.get('impact_score', 1)
-            summary = analysis.get('analysis_summary', 'No GitHub analysis')
-            metrics = analysis.get('metrics', {})
-            
-            return score, summary, metrics
-            
-        except Exception as e:
-            logger.error(f"GitHub analysis failed: {str(e)}")
-            return 1, "GitHub analysis failed", {}
+    # GitHub impact analysis completely removed
     
     async def assess_o1_compatibility(self, profile_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -242,13 +227,18 @@ Key LinkedIn-based O-1 criteria to evaluate:
 3. **Career Progression**: Rapid advancement, increasing responsibilities, clear progression through seniority levels
 4. **Professional Network**: High connection count, recommendations from senior professionals
 5. **Social Influence & Recognition**: IMPORTANT - Use the social influence analysis provided (LinkedIn followers, reach)
-6. **Technical Impact & Open Source**: CRITICAL - Use GitHub analysis provided (stars, repositories, contributions)
+6. **Technical Impact & Open Source**: Based on LinkedIn projects, publications, and technical achievements
 
 **SENIORITY LEVEL SCORING (Most Important Factor):**
 - **VP Level (9-10 points)**: CTO, CEO, Founder, VP, Chief Officer, Head of Department
 - **Executive Level (7-8 points)**: Director, Principal, Distinguished Engineer, Engineering Manager
 - **Senior Level (4-6 points)**: Senior Engineer, Staff Engineer, Senior Specialist, Senior Consultant  
 - **Junior Level (1-3 points)**: Engineer, Analyst, Coordinator, Associate, Entry-level roles
+
+**EDUCATION PRESTIGE BONUS (Important Factor):**
+- **Top-Tier Universities (+2 points)**: Stanford, MIT, Harvard, Carnegie Mellon, UC Berkeley, Caltech, Princeton, Yale
+- **Prestigious Programs (+1.5 points)**: Ivy League, Top 20 CS programs, renowned research institutions
+- **Research Experience (+1 point)**: PhD programs, research positions, academic publications
 
 **SOCIAL INFLUENCE SCORING (Recognition Factor):**
 - **Major Influencer (10 points)**: 50K+ total reach - Industry thought leader level
@@ -267,30 +257,106 @@ Key LinkedIn-based O-1 criteria to evaluate:
 - **Regular User (5 points)**: 10+ stars, active repos - Consistent development
 - **Casual User (1-4 points)**: <10 stars or minimal activity - Basic presence
 
-Assess each criterion on a scale of 1-10 based on what's visible in LinkedIn AND GitHub:
-- **Professional Seniority**: Use the provided seniority analysis - this is pre-calculated and crucial
-- **Company Prestige**: Google, Meta, Apple, Microsoft, OpenAI, top startups, well-known brands
-- **Social Influence & Recognition**: Use the provided social influence analysis - shows industry recognition
-- **Career Progression**: Multiple promotions, increasing scope, job title evolution
-- **Professional Network**: 500+ connections, recommendations from executives/leaders
-- **Technical Impact & Open Source**: Use the provided GitHub analysis - stars, repositories, technical contributions
+**PATENTS & INTELLECTUAL PROPERTY SCORING (High Impact Factor):**
+- **Multiple Patents (9-10 points)**: 5+ patents - Demonstrates innovation and extraordinary ability
+- **Significant Patents (7-8 points)**: 2-4 patents - Strong technical innovation
+- **Single Patent (5-6 points)**: 1 patent - Notable technical achievement
+- **No Patents (1-2 points)**: No patent activity
 
-Respond in JSON format with the following structure:
+**AWARDS & RECOGNITIONS SCORING (Recognition Factor):**
+- **Major Awards (9-10 points)**: Industry awards, national recognition, prestigious honors
+- **Professional Awards (7-8 points)**: Company awards, professional society recognition
+- **Academic Awards (5-6 points)**: University honors, research awards, scholarships
+- **Certifications (3-4 points)**: Professional certifications, technical credentials
+- **No Awards (1-2 points)**: No visible recognition
+
+**MEMBERSHIPS & PROFESSIONAL INVOLVEMENT SCORING (Industry Standing Factor):**
+- **Leadership Roles (9-10 points)**: Board member, committee chair, organization leader
+- **Active Member (7-8 points)**: Professional societies, technical committees, advisory roles
+- **Basic Membership (5-6 points)**: Member of professional organizations, industry groups
+- **Volunteer Work (3-4 points)**: Community involvement, non-profit work
+- **No Involvement (1-2 points)**: No visible professional involvement
+
+Assess the CORE 5 criteria on a scale of 1-10, then apply BONUS POINTS for exceptional achievements:
+
+**CORE CRITERIA (Base Score 1-10):**
+- **Professional Seniority**: Use the provided seniority analysis - this is pre-calculated and crucial. APPLY EDUCATION BONUS for prestigious institutions.
+- **Company Prestige**: Google, Meta, Apple, Microsoft, OpenAI, top startups, well-known brands
+- **Career Progression**: Multiple promotions, increasing scope, job title evolution. CONSIDER internships at top universities as strong progression indicators.
+- **Professional Network**: 500+ connections, recommendations from executives/leaders
+- **Technical Impact & Open Source**: Based on LinkedIn projects, publications, technical skills, and achievements
+
+**BONUS FACTORS (Add to base score, max +3.0 total bonus):**
+- **Patents & IP Bonus (+0.5 to +1.5)**: Each patent adds significant value - patents are CRITICAL evidence of extraordinary ability
+- **Awards & Recognition Bonus (+0.2 to +1.0)**: Industry awards, honors, certifications show peer recognition
+- **Publications Bonus (+0.2 to +0.8)**: Academic/technical publications demonstrate thought leadership
+- **Projects & Innovation Bonus (+0.1 to +0.5)**: Technical projects show practical expertise
+- **Specialized Education Bonus (+0.1 to +0.3)**: Advanced courses, specialized training
+- **Volunteer Leadership Bonus (+0.1 to +0.3)**: Leadership roles, community involvement
+
+**HYBRID SCORING METHODOLOGY (V1 Enhanced with V2 Logic):**
+1. Calculate base score from 4 core criteria using WEIGHTED AVERAGE:
+   - Professional Seniority: 30% weight (most important)
+   - Company Prestige: 25% weight  
+   - Career Progression: 25% weight
+   - Professional Network: 20% weight (LinkedIn connections/followers)
+
+2. Apply BONUS POINTS for exceptional achievements (max +3.0 total):
+   - Patents: +1.0 to +1.5 per patent (CRITICAL for O-1)
+   - Awards/Honors: +0.3 to +1.0 depending on prestige
+   - Publications: +0.2 to +0.8 depending on venue
+   - Technical Projects: +0.1 to +0.5 for innovation
+   - Specialized Courses: +0.1 to +0.3 for advanced training
+   - Volunteer Leadership: +0.1 to +0.3 for community impact
+
+3. MINIMUM SCORE GUARANTEES:
+   - Candidates with US Patents: minimum 5.5/10
+   - Prestigious education (Stanford, MIT, etc.): minimum 5.0/10
+   - Multiple awards + strong network: minimum 5.0/10
+
+4. Final score = min(10.0, weighted_base_score + total_bonus)
+
+**IMPORTANT EDUCATION CONSIDERATIONS:**
+- Internships or research positions at Stanford, MIT, Harvard, Carnegie Mellon, UC Berkeley, Brown University, IISc should significantly boost scores
+- Academic research experience, even at junior levels, demonstrates extraordinary ability potential
+- Publications, patents, or projects from prestigious institutions carry high weight
+- Consider the prestige of educational institutions when evaluating overall potential
+- Research leadership roles (leading labs, research divisions) indicate exceptional ability
+- Graduate programs at top universities (MS, PhD) show advanced expertise
+
+Respond in JSON format with the following HYBRID structure:
 {
   "overall_score": float (1-10),
+  "base_score": float (1-10),
+  "bonus_points": float (0-3.0),
+  "scoring_method": "hybrid_v1_enhanced",
   "criteria_scores": {
     "professional_seniority": float (1-10),
     "company_prestige": float (1-10),
     "career_progression": float (1-10),
-    "professional_network": float (1-10),
-    "technical_impact": float (1-10)
+    "professional_network": float (1-10)
+  },
+  "bonus_factors": {
+    "patents_ip_bonus": float (0-1.5),
+    "awards_recognition_bonus": float (0-1.0),
+    "publications_bonus": float (0-0.8),
+    "projects_innovation_bonus": float (0-0.5),
+    "specialized_education_bonus": float (0-0.3),
+    "volunteer_leadership_bonus": float (0-0.3)
+  },
+  "weighted_breakdown": {
+    "seniority_weighted": float (criteria_score * 0.30),
+    "prestige_weighted": float (criteria_score * 0.25),
+    "progression_weighted": float (criteria_score * 0.25),
+    "network_weighted": float (criteria_score * 0.20)
   },
   "evidence": {
     "professional_seniority": [list of specific evidence from LinkedIn],
     "company_prestige": [list of specific evidence from LinkedIn],
     "career_progression": [list of specific evidence from LinkedIn],
     "professional_network": [list of specific evidence from LinkedIn],
-    "technical_impact": [list of specific evidence from GitHub - stars, repos, contributions]
+
+    "bonus_achievements": [list of patents, awards, publications, projects that earned bonus points]
   },
   "strengths": [list of key strengths visible on LinkedIn],
   "weaknesses": [list of areas that appear weak on LinkedIn],
@@ -314,22 +380,17 @@ Respond in JSON format with the following structure:
         current_company = basic_info.get('current_company', 'N/A')
         seniority_level, seniority_score, seniority_reasoning = self.classify_seniority_level(current_title, current_company)
         
+        # Add V2 hybrid enhancements - company tier resolution
+        company_tier = self._resolve_company_tier(current_company)
+        tier_scores = {"A": 9.0, "A-": 8.0, "B": 6.5, "C": 5.0, "D": 3.0}
+        company_prestige_score_v2 = tier_scores.get(company_tier, 3.0)
+        
         # Analyze social influence
         influence_score, influence_analysis, follower_breakdown = self.analyze_social_influence(profile_data)
         
-        # Analyze GitHub impact if available
-        github_score = 1
-        github_analysis = "No GitHub profile available"
-        github_metrics = {}
+        # GitHub analysis completely removed - focusing on LinkedIn data only
         
-        # Check if GitHub data was provided
-        if 'github_data' in profile_data and profile_data['github_data']:
-            github_data = profile_data['github_data']
-            github_score = github_data.get('impact_score', 1)
-            github_analysis = github_data.get('analysis_summary', 'GitHub analysis available')
-            github_metrics = github_data.get('metrics', {})
-        
-        prompt = f"""Please assess the following professional's O-1 visa eligibility based on LinkedIn data:
+        prompt = f"""Please assess the following professional's O-1 visa eligibility using HYBRID V1+V2 methodology:
 
 **BASIC INFORMATION:**
 - Name: {basic_info.get('name', 'N/A')}
@@ -337,24 +398,20 @@ Respond in JSON format with the following structure:
 - **SENIORITY LEVEL: {seniority_level} (Score: {seniority_score}/10)**
 - **Seniority Analysis: {seniority_reasoning}**
 - **SOCIAL INFLUENCE: {influence_analysis} (Score: {influence_score}/10)**
-- **GITHUB IMPACT: {github_analysis} (Score: {github_score}/10)**
 - Location: {basic_info.get('location', 'N/A')}
 - Professional Summary: {basic_info.get('summary', 'N/A')[:300]}...
 - Current Company: {current_company}
 
-**SOCIAL MEDIA REACH & INFLUENCE:**
+**V2 HYBRID ENHANCEMENTS:**
+- **Company Tier: {company_tier}** (Prestige Score: {company_prestige_score_v2:.1f}/10)
+- **Social Reach (V2 Log Scale): {influence_score}/10** (more balanced than linear scaling)
+- **Enhanced Data**: Now includes projects, courses, volunteer experience, bio links
+
+**LINKEDIN PROFESSIONAL NETWORK:**
 - LinkedIn Connections: {follower_breakdown['linkedin_connections']:,}
 - LinkedIn Followers: {follower_breakdown['linkedin_followers']:,}
-- GitHub Followers: {github_metrics.get('followers', 0):,}
-- **GitHub Impact**: {github_metrics.get('total_stars', 0):,} stars across {github_metrics.get('original_repos', 0)} original repos ({github_metrics.get('public_repos', 0)} total repos)
-- **Total Social Reach: {follower_breakdown['linkedin_connections'] + follower_breakdown['linkedin_followers'] + github_metrics.get('followers', 0):,}**
-
-**GITHUB TECHNICAL EXCELLENCE:**
-- Total Stars Received: {github_metrics.get('total_stars', 0):,}
-- Total Forks: {github_metrics.get('total_forks', 0):,}
-- Original Repositories: {github_metrics.get('original_repos', 0)}
-- GitHub Followers: {github_metrics.get('followers', 0):,}
-- **GitHub Impact Level: {github_analysis}**
+- **Total LinkedIn Reach: {follower_breakdown['linkedin_connections'] + follower_breakdown['linkedin_followers']:,}**
+- **Network Analysis: {influence_analysis}**
 
 **PROFESSIONAL EXPERIENCE (Focus on seniority progression and company prestige):**"""
         
@@ -372,15 +429,40 @@ Respond in JSON format with the following structure:
         
         prompt += f"""
 
-**EDUCATION:**"""
+**EDUCATION (CRITICAL for O-1 Assessment):**"""
+        
+        # Analyze education prestige
+        prestigious_institutions = []
         for edu in education:
+            school = edu.get('school', '')
+            degree = edu.get('degree', '')
+            field = edu.get('field', '')
+            
+            # Check for top-tier institutions
+            top_tier_keywords = [
+                'stanford', 'mit', 'harvard', 'carnegie mellon', 'uc berkeley', 'caltech', 'princeton', 'yale',
+                'brown university', 'columbia', 'cornell', 'dartmouth', 'university of pennsylvania', 'upenn',
+                'georgia tech', 'university of washington', 'university of michigan', 'ucla', 'usc',
+                'indian institute of science', 'iisc', 'iit', 'indian institute of technology'
+            ]
+            is_top_tier = any(keyword in school.lower() for keyword in top_tier_keywords)
+            
+            if is_top_tier:
+                prestigious_institutions.append(school)
+            
+            prestige_indicator = "TOP-TIER INSTITUTION" if is_top_tier else ""
             prompt += f"""
-- {edu.get('degree', 'N/A')} in {edu.get('field', 'N/A')} from {edu.get('school', 'N/A')} ({edu.get('start_year', 'N/A')}-{edu.get('end_year', 'N/A')})"""
+- {degree} in {field} from {school} ({edu.get('start_year', 'N/A')}-{edu.get('end_year', 'N/A')}) {prestige_indicator}"""
+        
+        if prestigious_institutions:
+            prompt += f"""
+
+**PRESTIGIOUS EDUCATION BONUS: This candidate has studied/worked at {', '.join(prestigious_institutions)} - this significantly enhances O-1 eligibility even for junior-level professionals.**"""
         
         prompt += f"""
 
 **SKILLS:**
-{', '.join(skills[:20]) if skills else 'None listed'}
+{', '.join(str(skill) for skill in skills[:20]) if skills else 'None listed'}
 
 **ACCOMPLISHMENTS:**"""
         
@@ -403,12 +485,80 @@ Awards: {len(accomplishments['awards'])} awards including:"""
                 prompt += f"\n- {award}"
         
         if accomplishments.get("certifications"):
+            cert_names = []
+            for cert in accomplishments['certifications'][:5]:
+                if isinstance(cert, dict):
+                    cert_names.append(cert.get('title', 'Unknown Certification'))
+                else:
+                    cert_names.append(str(cert))
             prompt += f"""
-Certifications: {', '.join(accomplishments['certifications'][:5])}"""
+Certifications: {', '.join(cert_names)}"""
         
-        if accomplishments.get("projects"):
+        # Enhanced project analysis
+        projects = accomplishments.get("projects", [])
+        if projects:
             prompt += f"""
-Notable Projects: {len(accomplishments['projects'])} projects"""
+Technical Projects ({len(projects)} total):"""
+            for project in projects[:3]:
+                if isinstance(project, dict):
+                    title = project.get('title', 'Unknown Project')
+                    description = project.get('description', '')[:200]
+                    dates = f"{project.get('start_date', 'N/A')} - {project.get('end_date', 'N/A')}"
+                    prompt += f"""
+- Project: {title} ({dates})
+  Description: {description}..."""
+                else:
+                    prompt += f"""
+- Project: {str(project)}"""
+        
+        # Add courses (specialized education)
+        courses = accomplishments.get("courses", [])
+        if courses:
+            prompt += f"""
+
+Specialized Courses ({len(courses)} total):"""
+            for course in courses[:5]:
+                if isinstance(course, dict):
+                    title = course.get('title', 'Unknown Course')
+                    subtitle = course.get('subtitle', '')
+                    prompt += f"""
+- Course: {title} ({subtitle})"""
+                else:
+                    prompt += f"""
+- Course: {str(course)}"""
+        
+        # Add volunteer experience (shows leadership and involvement)
+        volunteer = accomplishments.get("volunteer_experience", [])
+        if volunteer:
+            prompt += f"""
+
+Volunteer Experience ({len(volunteer)} total):"""
+            for vol in volunteer[:3]:
+                if isinstance(vol, dict):
+                    title = vol.get('title', 'Unknown Role')
+                    subtitle = vol.get('subtitle', '')
+                    info = vol.get('info', '')
+                    prompt += f"""
+- Volunteer: {title} at {subtitle} - {info}"""
+                else:
+                    prompt += f"""
+- Volunteer: {str(vol)}"""
+        
+        # Add bio links (portfolio, websites)
+        bio_links = accomplishments.get("bio_links", [])
+        if bio_links:
+            prompt += f"""
+
+Portfolio & Bio Links ({len(bio_links)} total):"""
+            for link in bio_links[:3]:
+                if isinstance(link, dict):
+                    title = link.get('title', 'Link')
+                    url = link.get('link', '')
+                    prompt += f"""
+- {title}: {url}"""
+                else:
+                    prompt += f"""
+- Link: {str(link)}"""
         
         prompt += f"""
 
@@ -423,24 +573,76 @@ Notable Projects: {len(accomplishments['projects'])} projects"""
         
         prompt += f"""
 
-**PATENTS & CERTIFICATIONS (If available):**"""
-        if accomplishments.get("patents"):
-            for patent in accomplishments["patents"][:2]:
+**PATENTS & INTELLECTUAL PROPERTY (CRITICAL for O-1):**"""
+        patents = accomplishments.get("patents", [])
+        if patents:
+            prompt += f"""
+Patents ({len(patents)} total):"""
+            for patent in patents[:3]:  # Show top 3
                 if isinstance(patent, dict):
                     prompt += f"""
-- Patent: {patent.get('title', 'N/A')} (Issued: {patent.get('date_issued', 'N/A')})"""
+- Patent: {patent.get('title', 'N/A')} (US Patent {patent.get('patents_id', 'N/A')}, Issued: {patent.get('date_issued', 'N/A')})"""
                 else:
                     prompt += f"""
 - Patent: {patent}"""
+        else:
+            prompt += """
+No patents found."""
+
+        prompt += f"""
+
+**AWARDS & RECOGNITIONS (IMPORTANT for O-1):**"""
+        awards = accomplishments.get("awards", [])
+        certifications = accomplishments.get("certifications", [])
         
-        if accomplishments.get("certifications"):
-            for cert in accomplishments["certifications"][:3]:
+        if awards:
+            prompt += f"""
+Honors and Awards ({len(awards)} total):"""
+            for award in awards[:3]:
+                award_text = award if isinstance(award, str) else str(award)
+                prompt += f"""
+- Award: {award_text}"""
+        
+        if certifications:
+            prompt += f"""
+Professional Certifications ({len(certifications)} total):"""
+            for cert in certifications[:3]:
                 if isinstance(cert, dict):
                     prompt += f"""
-- Certification: {cert.get('title', 'N/A')} from {cert.get('subtitle', 'N/A')}"""
+- Certification: {cert.get('title', 'N/A')} from {cert.get('subtitle', 'N/A')} (Issued: {cert.get('meta', 'N/A')})"""
                 else:
                     prompt += f"""
 - Certification: {cert}"""
+        
+        if not awards and not certifications:
+            prompt += """
+No awards or certifications found."""
+
+        prompt += f"""
+
+**MEMBERSHIPS & PROFESSIONAL INVOLVEMENT (IMPORTANT for O-1):**"""
+        memberships = accomplishments.get("memberships", [])
+        professional_memberships = accomplishments.get("professional_memberships", [])
+        
+        if memberships:
+            prompt += f"""
+Organizations and Memberships ({len(memberships)} total):"""
+            for membership in memberships[:3]:
+                membership_text = membership if isinstance(membership, str) else str(membership)
+                prompt += f"""
+- Membership: {membership_text}"""
+        
+        if professional_memberships:
+            prompt += f"""
+Professional Memberships ({len(professional_memberships)} total):"""
+            for membership in professional_memberships[:3]:
+                membership_text = membership if isinstance(membership, str) else str(membership)
+                prompt += f"""
+- Professional Membership: {membership_text}"""
+        
+        if not memberships and not professional_memberships:
+            prompt += """
+No professional memberships found."""
         
         prompt += """
 
@@ -452,6 +654,18 @@ Focus on LinkedIn-visible indicators of extraordinary ability:
 4. Professional network size and quality of recommendations
 5. Technical expertise and industry certifications
 
+**SPECIAL CONSIDERATIONS FOR RESEARCH PROFESSIONALS:**
+- Research leadership roles (leading labs, research divisions) should score highly for career progression
+- Strong LinkedIn networking (1K+ followers, 500+ connections) indicates industry recognition
+- Graduate studies at prestigious institutions demonstrate advanced expertise
+- Research positions at top universities/institutes show extraordinary academic ability
+- Technical contributions in cutting-edge fields (3D Vision, ML, AI) demonstrate specialized expertise
+
+**SCORING ADJUSTMENTS:**
+- If candidate has 1K+ LinkedIn followers + prestigious education + research leadership → minimum 6.0 score
+- Research positions at Brown, IISc, or similar institutions should boost professional_seniority to at least 5.0
+- Strong social presence (1K+ followers) should boost professional_network to at least 7.0
+
 Provide a realistic O-1 assessment based ONLY on what's visible in this LinkedIn profile."""
         
         return prompt
@@ -460,6 +674,8 @@ Provide a realistic O-1 assessment based ONLY on what's visible in this LinkedIn
         """Create a fallback assessment when GPT fails."""
         return {
             "overall_score": 0.0,
+            "base_score": 0.0,
+            "bonus_points": 0.0,
             "criteria_scores": {
                 "professional_seniority": 0.0,
                 "company_prestige": 0.0,
@@ -467,12 +683,21 @@ Provide a realistic O-1 assessment based ONLY on what's visible in this LinkedIn
                 "professional_network": 0.0,
                 "technical_impact": 0.0
             },
+            "bonus_factors": {
+                "patents_ip_bonus": 0.0,
+                "awards_recognition_bonus": 0.0,
+                "publications_bonus": 0.0,
+                "projects_innovation_bonus": 0.0,
+                "specialized_education_bonus": 0.0,
+                "volunteer_leadership_bonus": 0.0
+            },
             "evidence": {
                 "professional_seniority": [],
                 "company_prestige": [],
                 "career_progression": [],
                 "professional_network": [],
-                "technical_impact": []
+                "technical_impact": [],
+                "bonus_achievements": []
             },
             "strengths": [],
             "weaknesses": ["Assessment failed due to technical error"],
@@ -499,3 +724,33 @@ Provide a realistic O-1 assessment based ONLY on what's visible in this LinkedIn
         except Exception as e:
             logger.error(f"OpenAI connection test failed: {str(e)}")
             return False
+
+    def _resolve_company_tier(self, company_name: str) -> str:
+        """Resolve company tier based on company name (integrated from V2)."""
+        if not company_name or company_name == "N/A":
+            return "D"
+        
+        company_lower = company_name.lower()
+        
+        # Tier A: FAANG + Top Tech
+        tier_a = ["google", "apple", "meta", "facebook", "amazon", "netflix", "microsoft", "nvidia", "openai", "anthropic"]
+        if any(company in company_lower for company in tier_a):
+            return "A"
+        
+        # Tier A-: High-tier tech companies
+        tier_a_minus = ["uber", "airbnb", "stripe", "spotify", "twitter", "x corp", "tesla", "spacex", "palantir"]
+        if any(company in company_lower for company in tier_a_minus):
+            return "A-"
+        
+        # Tier B: Established tech companies
+        tier_b = ["oracle", "salesforce", "adobe", "intel", "ibm", "cisco", "vmware", "snowflake", "databricks", "atlassian"]
+        if any(company in company_lower for company in tier_b):
+            return "B"
+        
+        # Tier C: Mid-tier companies
+        tier_c = ["startup", "consulting", "accenture", "deloitte", "pwc", "kpmg", "ey"]
+        if any(company in company_lower for company in tier_c):
+            return "C"
+        
+        # Default to D for unknown companies
+        return "D"

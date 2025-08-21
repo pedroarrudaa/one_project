@@ -10,8 +10,8 @@ from app.database import SessionLocal
 from app.models.profile import Profile, ProcessingLog
 from app.services.linkedin_discovery_service import LinkedInDiscoveryService
 from app.services.brightdata_service import BrightDataService
-from app.services.gpt_scoring_service import GPTScoringService
-from app.services.github_analytics_service import GitHubAnalyticsService
+from app.services.scoring_v1 import GPTScoringService
+
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class ProfileProcessor:
         self.linkedin_discovery = LinkedInDiscoveryService()
         self.brightdata = BrightDataService()
         self.gpt_scoring = GPTScoringService()
-        self.github_analytics = GitHubAnalyticsService()
+
     
     async def process_profile(self, profile_id: str) -> Dict[str, Any]:
         """
@@ -49,11 +49,11 @@ class ProfileProcessor:
             profile.processing_status = "processing"
             db.commit()
             
-            # Step 1: LinkedIn Discovery (if needed)
-            linkedin_url = await self._ensure_linkedin_url(profile, db)
+            # Step 1: Use existing LinkedIn URL (no discovery needed)
+            linkedin_url = profile.linkedin_profile
             if not linkedin_url:
                 return await self._handle_processing_error(
-                    profile, db, "linkedin_discovery", "Could not find LinkedIn profile"
+                    profile, db, "linkedin_url", "No LinkedIn profile URL available"
                 )
             
             # Step 2: BrightData Scraping
@@ -63,11 +63,13 @@ class ProfileProcessor:
                     profile, db, "brightdata_scraping", "LinkedIn scraping failed"
                 )
             
-            # Step 3: Discover additional social links
-            social_links = await self._discover_social_links(profile, linkedin_url, db)
+            # Step 3: Social links simplified (LinkedIn only)
+            social_links = {"linkedin": linkedin_url}
             
-            # Step 4: GitHub Analytics (if GitHub URL available)
-            github_data = await self._analyze_github_profile(profile, social_links, db)
+            # Step 4: GitHub Analytics removed - focusing on LinkedIn + Twitter only
+            github_data = None
+            
+            # Step 4.5: GitHub enhancement removed
             
             # Step 5: GPT Assessment (now includes GitHub data)
             assessment = await self._assess_with_gpt(profile, linkedin_data, github_data, db)
@@ -77,7 +79,7 @@ class ProfileProcessor:
                 )
             
             # Step 6: Update profile with results
-            await self._save_results(profile, linkedin_data, social_links, github_data, assessment, db)
+            await self._save_results(profile, linkedin_data, social_links, assessment, db)
             
             # Step 6: Update rankings
             await self._update_rankings(db)
@@ -169,6 +171,7 @@ class ProfileProcessor:
             
             social_links = await self.linkedin_discovery.discover_additional_social_links(
                 name=profile.name,
+                email=profile.email,
                 linkedin_url=linkedin_url
             )
             
@@ -180,52 +183,18 @@ class ProfileProcessor:
             self._log_step(db, profile.id, "social_discovery", "failed", str(e))
             return {"linkedin": linkedin_url}  # At least return LinkedIn
     
-    async def _analyze_github_profile(self, profile: Profile, social_links: Dict[str, str], db: Session) -> Optional[Dict[str, Any]]:
-        """Analyze GitHub profile if available."""
-        try:
-            self._log_step(db, profile.id, "github_analysis", "started", "Analyzing GitHub profile")
-            
-            github_url = social_links.get('github')
-            if not github_url:
-                self._log_step(db, profile.id, "github_analysis", "completed", 
-                             "No GitHub URL available", {"github_data": None})
-                return None
-            
-            logger.info(f"Analyzing GitHub for: {profile.name}")
-            github_data = await self.github_analytics.analyze_github_profile(github_url)
-            
-            if github_data and github_data.get('impact_score', 0) > 1:
-                self._log_step(db, profile.id, "github_analysis", "completed", 
-                             "GitHub analysis successful", {
-                                 "username": github_data.get('username'),
-                                 "impact_score": github_data.get('impact_score'),
-                                 "total_stars": github_data.get('metrics', {}).get('total_stars', 0),
-                                 "followers": github_data.get('metrics', {}).get('followers', 0)
-                             })
-                return github_data
-            else:
-                self._log_step(db, profile.id, "github_analysis", "completed", 
-                             "No significant GitHub activity found")
-                return None
-            
-        except Exception as e:
-            logger.error(f"GitHub analysis failed for {profile.name}: {str(e)}")
-            self._log_step(db, profile.id, "github_analysis", "failed", 
-                         f"GitHub analysis error: {str(e)}")
-            return None
+
+    
+
     
     async def _assess_with_gpt(self, profile: Profile, linkedin_data: Dict[str, Any], 
                               github_data: Optional[Dict[str, Any]], db: Session) -> Optional[Dict[str, Any]]:
-        """Assess profile using GPT-4o-mini."""
+        """Assess profile using GPT-4o-mini (GitHub removed)."""
         try:
             self._log_step(db, profile.id, "gpt_assessment", "started", "Starting GPT assessment")
             
-            # Combine LinkedIn and GitHub data for assessment
-            combined_data = linkedin_data.copy()
-            if github_data:
-                combined_data['github_data'] = github_data
-            
-            assessment = await self.gpt_scoring.assess_o1_compatibility(combined_data)
+            # Use only LinkedIn data for assessment (GitHub removed)
+            assessment = await self.gpt_scoring.assess_o1_compatibility(linkedin_data)
             
             if assessment and not assessment.get("error"):
                 self._log_step(db, profile.id, "gpt_assessment", "completed", 
@@ -241,8 +210,7 @@ class ProfileProcessor:
             return None
     
     async def _save_results(self, profile: Profile, linkedin_data: Dict[str, Any], 
-                          social_links: Dict[str, str], github_data: Optional[Dict[str, Any]], 
-                          assessment: Dict[str, Any], db: Session):
+                          social_links: Dict[str, str], assessment: Dict[str, Any], db: Session):
         """Save all processing results to the profile."""
         try:
             # Update profile with all results
@@ -254,9 +222,7 @@ class ProfileProcessor:
             profile.processing_status = "completed"
             profile.updated_at = datetime.utcnow()
             
-            # Add GitHub data to linkedin_data for storage
-            if github_data:
-                profile.linkedin_data['github_data'] = github_data
+            # GitHub data removed from storage
             
             db.commit()
             
@@ -359,3 +325,88 @@ class ProfileProcessor:
             "failed": failed,
             "results": results
         }
+    
+    async def process_profiles_sequentially(self, profile_ids: list = None, max_profiles: int = None) -> Dict[str, Any]:
+        """
+        Process profiles one by one to avoid timeouts and resource issues.
+        
+        Args:
+            profile_ids: List of specific profile IDs to process. If None, processes pending profiles.
+            max_profiles: Maximum number of profiles to process in this batch
+            
+        Returns:
+            Dictionary with processing results and statistics
+        """
+        db = SessionLocal()
+        try:
+            # Get profiles to process
+            if profile_ids:
+                profiles_query = db.query(Profile).filter(Profile.id.in_(profile_ids))
+            else:
+                profiles_query = db.query(Profile).filter(
+                    Profile.processing_status.in_(['pending', 'failed'])
+                ).order_by(Profile.created_at)
+            
+            if max_profiles:
+                profiles_query = profiles_query.limit(max_profiles)
+            
+            profiles_to_process = profiles_query.all()
+            
+            logger.info(f"Starting sequential processing of {len(profiles_to_process)} profiles")
+            
+            results = {
+                "total_profiles": len(profiles_to_process),
+                "successful": 0,
+                "failed": 0,
+                "results": [],
+                "start_time": datetime.utcnow().isoformat()
+            }
+            
+            for i, profile in enumerate(profiles_to_process, 1):
+                logger.info(f"Processing profile {i}/{len(profiles_to_process)}: {profile.name}")
+                
+                try:
+                    # Process individual profile
+                    result = await self.process_profile(profile.id)
+                    
+                    if "error" in result:
+                        results["failed"] += 1
+                        logger.error(f"Failed to process {profile.name}: {result['error']}")
+                    else:
+                        results["successful"] += 1
+                        logger.info(f"Successfully processed {profile.name} (Score: {result.get('final_score', 'N/A')})")
+                    
+                    results["results"].append({
+                        "profile_id": profile.id,
+                        "name": profile.name,
+                        "email": profile.email,
+                        "result": result
+                    })
+                    
+                    # Small delay between profiles to be gentle on APIs
+                    if i < len(profiles_to_process):  # Don't wait after last profile
+                        logger.info("Waiting 10s before next profile...")
+                        await asyncio.sleep(10)
+                        
+                except Exception as e:
+                    results["failed"] += 1
+                    logger.error(f"Exception processing {profile.name}: {str(e)}")
+                    results["results"].append({
+                        "profile_id": profile.id,
+                        "name": profile.name,
+                        "email": profile.email,
+                        "result": {"error": str(e)}
+                    })
+            
+            results["end_time"] = datetime.utcnow().isoformat()
+            results["success_rate"] = (results["successful"] / results["total_profiles"]) * 100 if results["total_profiles"] > 0 else 0
+            
+            logger.info(f"Sequential processing completed: {results['successful']}/{results['total_profiles']} successful ({results['success_rate']:.1f}%)")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Sequential processing failed: {str(e)}")
+            return {"error": str(e)}
+        finally:
+            db.close()

@@ -16,6 +16,7 @@ class BrightDataService:
         self.api_key = settings.brightdata_api_key
         self.timeout = settings.brightdata_timeout
         self.retries = settings.brightdata_retries
+        self.retry_delay = settings.brightdata_retry_delay
         self.base_url = "https://api.brightdata.com/datasets/v3/trigger"
         self.dataset_id = "gd_l1viktl72bvl7bjuj0"
     
@@ -79,19 +80,24 @@ class BrightDataService:
                             break
                 
                 except httpx.TimeoutException:
-                    logger.warning(f"Timeout on attempt {attempt + 1} for {linkedin_url}")
+                    wait_time = self.retry_delay * (attempt + 1)  # Linear backoff
+                    logger.warning(f"Timeout on attempt {attempt + 1}/{self.retries} for {linkedin_url}. Waiting {wait_time}s...")
                     if attempt < self.retries - 1:
-                        await asyncio.sleep(2 ** attempt)
+                        await asyncio.sleep(wait_time)
                         continue
                     else:
+                        logger.error(f"Final timeout after {self.retries} attempts for {linkedin_url}")
                         break
                 
                 except Exception as e:
-                    logger.error(f"Request failed on attempt {attempt + 1}: {str(e)}")
+                    wait_time = self.retry_delay * (attempt + 1)
+                    logger.error(f"Request failed on attempt {attempt + 1}/{self.retries}: {str(e)}")
                     if attempt < self.retries - 1:
-                        await asyncio.sleep(2 ** attempt)
+                        logger.info(f"Retrying in {wait_time}s...")
+                        await asyncio.sleep(wait_time)
                         continue
                     else:
+                        logger.error(f"Final failure after {self.retries} attempts for {linkedin_url}")
                         break
             
             logger.error(f"Failed to scrape LinkedIn profile after {self.retries} attempts: {linkedin_url}")
@@ -116,8 +122,8 @@ class BrightDataService:
             results_url = f"https://api.brightdata.com/datasets/v3/snapshot/{snapshot_id}"
             headers = {"Authorization": f"Bearer {self.api_key}"}
             
-            # Poll for results (max 3 minutes)
-            max_attempts = 18  # 18 attempts * 10 seconds = 180 seconds (3 minutes)
+            # Poll for results (max 12 minutes) - Significantly increased
+            max_attempts = 72  # 72 attempts * 10 seconds = 720 seconds (12 minutes)
             
             for attempt in range(max_attempts):
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -139,19 +145,22 @@ class BrightDataService:
                         
                         # Check if status is still running
                         elif isinstance(data, dict) and data.get("status") == "running":
-                            logger.info(f"BrightData still processing... attempt {attempt + 1}/{max_attempts}")
+                            elapsed_minutes = (attempt + 1) * 10 / 60
+                            logger.info(f"BrightData still processing... {elapsed_minutes:.1f}min elapsed (attempt {attempt + 1}/{max_attempts})")
                             await asyncio.sleep(10)
                             continue
                     
                     elif response.status_code == 202:
                         # Status 202 means still processing
-                        logger.info(f"BrightData processing (202)... attempt {attempt + 1}/{max_attempts}")
+                        elapsed_minutes = (attempt + 1) * 10 / 60
+                        logger.info(f"BrightData processing (202)... {elapsed_minutes:.1f}min elapsed")
                         await asyncio.sleep(10)
                         continue
                     
                     elif response.status_code == 404:
                         # Data not ready yet, wait and retry
-                        logger.info(f"Waiting for BrightData results... attempt {attempt + 1}/{max_attempts}")
+                        elapsed_minutes = (attempt + 1) * 10 / 60
+                        logger.info(f"Waiting for BrightData results... {elapsed_minutes:.1f}min elapsed")
                         await asyncio.sleep(10)
                         continue
                     
@@ -187,7 +196,7 @@ class BrightDataService:
                     "summary": raw_data.get("summary", ""),
                     "profile_url": raw_data.get("url", "") or raw_data.get("input_url", ""),
                     "profile_image": raw_data.get("avatar", ""),
-                    "connections_count": raw_data.get("connections", 0),  # Usar 'connections' do BrightData
+                    "connections_count": raw_data.get("connections", 0),  # Use 'connections' from BrightData
                     "followers_count": raw_data.get("followers", 0),
                     "current_company": raw_data.get("current_company_name", "")
                 },
@@ -236,15 +245,30 @@ class BrightDataService:
             # Normalize skills
             normalized["skills"] = raw_data.get("skills", [])
             
-            # Normalize accomplishments
+            # Normalize accomplishments - Enhanced to include more data
             accomplishments = raw_data.get("accomplishments", {})
-            if accomplishments:
-                normalized["accomplishments"]["publications"] = accomplishments.get("publications", [])
-                normalized["accomplishments"]["patents"] = accomplishments.get("patents", [])
-                normalized["accomplishments"]["awards"] = accomplishments.get("awards", [])
-                normalized["accomplishments"]["certifications"] = accomplishments.get("certifications", [])
-                normalized["accomplishments"]["languages"] = accomplishments.get("languages", [])
-                normalized["accomplishments"]["projects"] = accomplishments.get("projects", [])
+            
+            # Get data directly from raw_data (BrightData format) - Enhanced extraction
+            normalized["accomplishments"]["publications"] = raw_data.get("publications", []) or []
+            normalized["accomplishments"]["patents"] = raw_data.get("patents", []) or []
+            normalized["accomplishments"]["awards"] = raw_data.get("honors_and_awards", []) or []
+            normalized["accomplishments"]["certifications"] = raw_data.get("certifications", []) or []
+            normalized["accomplishments"]["languages"] = raw_data.get("languages", []) or []
+            normalized["accomplishments"]["projects"] = raw_data.get("projects", []) or []
+            
+            # Add new high-value categories for O-1 assessment
+            normalized["accomplishments"]["courses"] = raw_data.get("courses", []) or []
+            normalized["accomplishments"]["volunteer_experience"] = raw_data.get("volunteer_experience", []) or []
+            normalized["accomplishments"]["bio_links"] = raw_data.get("bio_links", []) or []
+            
+            # Professional involvement and memberships
+            normalized["accomplishments"]["memberships"] = raw_data.get("organizations", []) or []
+            normalized["accomplishments"]["professional_memberships"] = raw_data.get("professional_memberships", []) or []
+            
+            # Additional profile information
+            normalized["basic_info"]["about"] = raw_data.get("about", "") or raw_data.get("summary", "")
+            normalized["basic_info"]["position"] = raw_data.get("position", "")
+            normalized["basic_info"]["recommendations_count"] = raw_data.get("recommendations_count", 0)
             
             # Normalize recommendations
             recommendations_data = raw_data.get("recommendations") or []

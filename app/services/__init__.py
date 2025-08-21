@@ -2,7 +2,7 @@
 
 from .linkedin_discovery_service import LinkedInDiscoveryService
 from .brightdata_service import BrightDataService
-from .gpt_scoring_service import GPTScoringService
+from .scoring_v1 import GPTScoringService
 from .profile_processor import ProfileProcessor
 from .tavily_service import TavilyService
 
