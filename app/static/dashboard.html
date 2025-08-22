@@ -520,24 +520,28 @@
       
       const emailBody = `Hi ${firstName},
 
-I'm Sahar, an AI founder who came to the U.S. on an O-1 visa and later obtained an EB-1 Green Card. Both are non-quota visas designed for experts with extraordinary ability.
+TLDR: Many professionals aren’t aware of the O-1/EB-1 visas, which provide a path to live and work in the U.S. without quota restrictions. From your achievements, you may already qualify, and I’d be glad to share more details if you’re interested.
 
-Your profile — ${topSignals} — suggests you could be a strong candidate across multiple O-1/EB-1 criteria. Many researchers aren't aware of these options, yet they can be life-changing, especially given today's immigration uncertainties. Importantly, spouses are also allowed to work on these visas.
+I’m Sahar, an AI founder who came to the U.S. on an O-1 visa and later obtained an EB-1 Green Card. Both are non-quota visas designed for experts with extraordinary ability.
 
-Alongside my own journey, I run a community for O-1/EB-1 applicants, publish a blog for AI developers and researchers, and organize events to connect and grow the AI community. My goal is to make this process more transparent and supportive for others.
+Your profile: ${topSignals}, suggests you could be eligible for an O-1/EB-1 visa. Many talents AI operators aren’t aware of these option, which is increasingly lucrative given today’s immigration uncertainties. Importantly, spouses are also allowed to work on these visas.
 
-I've been through this process myself and now try to make it easier for others, including connecting them with a specialized legal expert. To assess fit, please complete his short form (takes <5 minutes).
+I’ve been through this process myself and now try to make it easier for others, including connecting them with legal firms that are credible and specialize in working with AI talent. My goal is to help more talented AI folks pursue their professional goals without the immigration burden. 
+
+To assess fit, please complete his short form (take <5 minutes).
 
 Looking forward,
 Sahar
-linkedin.com/in/sahar-mor`;
+linkedin.com/in/sahar-mor
+
+P.S. I run a community for O-1/EB-1 applicants, publish a blog for AI developers and researchers, and organize events to connect and grow the AI community.`;
 
       // Create mailto link with hidden links in HTML version
       const htmlBody = emailBody
-        .replace('community for O-1/EB-1 applicants', '<a href="https://saharmortech.substack.com">community for O-1/EB-1 applicants</a>')
-        .replace('publish a blog', '<a href="https://saharmortech.substack.com">publish a blog</a>')
-        .replace('organize events', '<a href="https://lu.ma/saharmortech">organize events</a>')
-        .replace('complete his short form', '<a href="https://airtable.com/shrYourFormID">complete his short form</a>');
+        .replace('community for O-1/EB-1 applicants', '<a href="https://discord.com/invite/9jk6fhME4V" style="color: #667eea; text-decoration: none;">community for O-1/EB-1 applicants</a>')
+        .replace('blog for AI developers and researchers', '<a href="https://www.aitidbits.ai/" style="color: #667eea; text-decoration: none;">blog for AI developers and researchers</a>')
+        .replace('organize events', 'organize <a href="https://lu.ma/genai-sf" style="color: #667eea; text-decoration: none;">events</a>')
+        .replace('short form (take <5 minutes)', '<a href="https://forms.gle/n4Gyr7L1SoBY97yGA" style="color: #667eea; text-decoration: none;">short form</a> (take &lt;5 minutes)');
       
       return {
         subject: subject,
@@ -632,36 +636,36 @@ linkedin.com/in/sahar-mor`;
         
         const emailBody = `Hi ${firstName},
 
-I'm Sahar, an AI founder who came to the U.S. on an O-1 visa and later obtained an EB-1 Green Card. Both are non-quota visas designed for experts with extraordinary ability.
+TLDR: Many professionals aren’t aware of the O-1/EB-1 visas, which provide a path to live and work in the U.S. without quota restrictions. From your achievements, you may already qualify, and I’d be glad to share more details if you’re interested.
 
-Your profile — ${topSignals} — suggests you could be a strong candidate across multiple O-1/EB-1 criteria. Many researchers aren't aware of these options, yet they can be life-changing, especially given today's immigration uncertainties. Importantly, spouses are also allowed to work on these visas.
+I’m Sahar, an AI founder who came to the U.S. on an O-1 visa and later obtained an EB-1 Green Card. Both are non-quota visas designed for experts with extraordinary ability.
 
-Alongside my own journey, I run a community for O-1/EB-1 applicants, publish a blog for AI developers and researchers, and organize events to connect and grow the AI community. My goal is to make this process more transparent and supportive for others.
+Your profile: ${topSignals}, suggests you could be eligible for an O-1/EB-1 visa. Many talents AI operators aren’t aware of these option, which is increasingly lucrative given today’s immigration uncertainties. Importantly, spouses are also allowed to work on these visas.
 
-I've been through this process myself and now try to make it easier for others, including connecting them with a specialized legal expert. To assess fit, please complete his short form (takes <5 minutes).
+I’ve been through this process myself and now try to make it easier for others, including connecting them with legal firms that are credible and specialize in working with AI talent. My goal is to help more talented AI folks pursue their professional goals without the immigration burden. 
+
+To assess fit, please complete his short form (take <5 minutes).
 
 Looking forward,
 Sahar
-linkedin.com/in/sahar-mor`;
+linkedin.com/in/sahar-mor
+
+P.S. I run a community for O-1/EB-1 applicants, publish a blog for AI developers and researchers, and organize events to connect and grow the AI community.`;
 
         // Create two versions: clean text for email client, HTML for preview
         const cleanEmailBody = emailBody
           .replace('community for O-1/EB-1 applicants', 'community for O-1/EB-1 applicants (https://discord.com/invite/9jk6fhME4V)')
-          .replace('publish a blog', 'publish a blog (https://www.aitidbits.ai/)')
+          .replace('blog for AI developers and researchers', 'blog for AI developers and researchers (https://www.aitidbits.ai/)')
           .replace('organize events', 'organize events (https://lu.ma/genai-sf)')
-          .replace('complete his short form', 'complete his short form (https://forms.gle/n4Gyr7L1SoBY97yGA)');
+          .replace('short form (take <5 minutes)', 'short form (https://forms.gle/n4Gyr7L1SoBY97yGA) (take <5 minutes)');
         
         const htmlPreviewBody = emailBody
           .replace('community for O-1/EB-1 applicants', '<a href="https://discord.com/invite/9jk6fhME4V" style="color: #667eea; text-decoration: none;">community for O-1/EB-1 applicants</a>')
-          .replace('publish a blog', 'publish a <a href="https://www.aitidbits.ai/" style="color: #667eea; text-decoration: none;">blog</a>')
-          .replace('organize events', '<a href="https://lu.ma/genai-sf" style="color: #667eea; text-decoration: none;">organize events</a>')
-          .replace('complete his short form', 'complete his <a href="https://forms.gle/n4Gyr7L1SoBY97yGA" style="color: #667eea; text-decoration: none;">short form</a>');
+          .replace('blog for AI developers and researchers', '<a href="https://www.aitidbits.ai/" style="color: #667eea; text-decoration: none;">blog for AI developers and researchers</a>')
+          .replace('organize events', 'organize <a href="https://lu.ma/genai-sf" style="color: #667eea; text-decoration: none;">events</a>')
+          .replace('short form (take <5 minutes)', '<a href="https://forms.gle/n4Gyr7L1SoBY97yGA" style="color: #667eea; text-decoration: none;">short form</a> (take &lt;5 minutes)');
         
-        // Open email client with clean text (links as URLs)
-        const mailto = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(cleanEmailBody)}`;
-        window.open(mailto);
-        
-        // Show preview modal with HTML version (clickable links)
+        // Open modal only; do not open the email client automatically
         showEmailPreviewWithClickableLinks(subject, cleanEmailBody, htmlPreviewBody, email);
         
       } catch (error) {
@@ -798,11 +802,8 @@ linkedin.com/in/sahar-mor`;
           max-width: 700px; width: 100%; max-height: 85vh; overflow-y: auto;
           border: 1px solid var(--border);
         ">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; color: var(--text);">📧 Personalized Outreach Email</h3>
-            <button onclick="this.closest('div').parentElement.remove()" style="
-              background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted);
-            ">×</button>
           </div>
           
           <div style="margin-bottom: 12px;">
@@ -818,22 +819,29 @@ linkedin.com/in/sahar-mor`;
             <div style="
               background: white; color: #333; padding: 16px; border-radius: 8px; 
               border: 1px solid #ddd; font-family: Arial, sans-serif; line-height: 1.6;
-              max-height: 400px; overflow-y: auto;
-            ">${htmlBody.replace(/\\n/g, '<br><br>')}</div>
+              max-height: 300px; overflow-y: auto;
+              margin-bottom: 12px;
+            ">${htmlBody.replace(/\n/g, '<br><br>')}</div>
+            <div style="color: var(--muted); font-size: 12px; margin-bottom: 6px;">Edit message (plain text used for sending):</div>
+            <textarea id="emailEditor" style="width: 100%; height: 180px; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 13px; line-height: 1.5;">${plainBody}</textarea>
           </div>
           
           <div style="display: flex; gap: 12px; justify-content: flex-end;">
-            <button onclick="copyEmailText(this, 'plain')" 
-              data-text="${plainBody.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
-              class="contact-btn" style="background: #28a745;">
-              📋 Copy
-            </button>
-            <button onclick="openGmailDirect(this)" 
+            <button onclick="saveEmailDraft(this)" 
               data-email="${email}" 
-              data-subject="${subject.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" 
-              data-plain-body="${plainBody.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
-              class="contact-btn" style="background: #ea4335;">
-              📧 Open Gmail
+              data-subject="${subject.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+              class="contact-btn" style="background: var(--primary);">
+              Save & Approve
+            </button>
+            <button onclick="sendEmailFromModal(this)" 
+              data-email="${email}" 
+              data-subject="${subject.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+              class="contact-btn" style="background: var(--primary);">
+              Send
+            </button>
+            <button onclick="this.closest('div').parentElement.remove()" 
+              class="contact-btn" style="background: var(--primary);">
+              Close
             </button>
           </div>
         </div>
@@ -845,6 +853,42 @@ linkedin.com/in/sahar-mor`;
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
       });
+    }
+
+    // Save draft to localStorage for later reference
+    function saveEmailDraft(button) {
+      try {
+        const email = button.dataset.email;
+        const subject = button.dataset.subject.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        const editor = document.getElementById('emailEditor');
+        const body = editor ? editor.value : '';
+        const key = `draft:${email}:${subject}`;
+        localStorage.setItem(key, body);
+        const original = button.textContent;
+        button.textContent = 'Saved';
+        setTimeout(() => { button.textContent = 'Save & Approve'; }, 1500);
+      } catch (err) {
+        console.error('Failed to save draft', err);
+      }
+    }
+
+    // Send using Gmail compose with the edited body
+    function sendEmailFromModal(button) {
+      try {
+        const email = button.dataset.email;
+        const subject = button.dataset.subject.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        const editor = document.getElementById('emailEditor');
+        const body = editor ? editor.value : '';
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.open(gmailUrl, '_blank');
+        const original = button.textContent;
+        button.textContent = 'Sent';
+        setTimeout(() => { button.textContent = 'Send'; }, 1500);
+      } catch (error) {
+        console.error('Error opening Gmail:', error);
+        button.textContent = 'Failed';
+        setTimeout(() => { button.textContent = 'Send'; }, 1500);
+      }
     }
     
     // Copy email text (plain or HTML)
