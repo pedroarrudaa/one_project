@@ -267,6 +267,9 @@ class ProfileProcessor:
             elif total >= 3000:
                 score_points += 1
                 reasons.append("network ≥3k")
+            elif total >= 2000:
+                score_points += 1
+                reasons.append("network ≥2k")
 
             # Company prestige
             tier_companies = ["Google", "Meta", "Apple", "Microsoft", "Amazon", "NVIDIA"]
@@ -290,15 +293,28 @@ class ProfileProcessor:
             awards = acc.get("awards", []) or []
             publications = acc.get("publications", []) or []
             projects = acc.get("projects", []) or []
-            if any([awards, publications, projects]):
+            patents = acc.get("patents", []) or []
+            if any([awards, publications, projects, patents]):
                 score_points += 1
-                reasons.append("awards/publications/projects")
+                reasons.append("awards/publications/projects/patents")
 
             # Recommendations
             recs = basic.get("recommendations_count") or 0
             if recs >= 5:
                 score_points += 1
                 reasons.append("≥5 recommendations")
+
+            # Evidence-based boosts (founder/organizer/mentor)
+            evidence = (assessment or {}).get("evidence", {})
+            career_items = ", ".join([str(x) for x in evidence.get("career_progression", []) or []]).lower()
+            if any(k in career_items for k in ["founder", "co-founder", "organizer", "mentor", "judge"]):
+                score_points += 1
+                reasons.append("leadership/community keywords")
+
+            # Strong-signal promotion
+            if len(patents) >= 5 or total >= 10000:
+                score_points += 2
+                reasons.append("strong signal (patents≥5 or reach≥10k)")
 
             score = min(1.0, max(0.0, score_points / max_points)) if max_points > 0 else 0.0
             return score, ", ".join(reasons)

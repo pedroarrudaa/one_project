@@ -337,6 +337,31 @@ def get_system_stats(db: Session = Depends(get_db)):
     )
 
 
+@app.post("/judge/recompute")
+def recompute_judge_for_completed(db: Session = Depends(get_db)):
+    """Recompute judge auto-score for all completed profiles."""
+    try:
+        gpt_service = GPTScoringService()
+        updated = 0
+        profiles = db.query(Profile).filter(Profile.processing_status == "completed").all()
+        for p in profiles:
+            linkedin_data = p.linkedin_data or {}
+            assessment = p.gpt_assessment or {}
+            # reuse processor heuristic without instantiating the full processor
+            from app.services.profile_processor import ProfileProcessor
+            proc = ProfileProcessor()
+            auto_score, auto_reason = proc._compute_judge_auto_suggestion(linkedin_data, assessment)
+            p.judge_auto_score = auto_score
+            p.judge_auto_reason = auto_reason
+            if not p.judge_status or p.judge_status == "unknown":
+                p.judge_status = "candidate" if (auto_score is not None and auto_score >= 0.6) else p.judge_status
+            updated += 1
+        db.commit()
+        return {"updated": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.get("/healthz")
 def healthz():
