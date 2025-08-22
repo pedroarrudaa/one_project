@@ -25,6 +25,7 @@ from app.schemas import (
 )
 from app.models import Profile, ProcessingLog
 from app.services.profile_processor import ProfileProcessor
+from app.services.scoring_v1 import GPTScoringService
 
 from pathlib import Path
 
@@ -257,6 +258,7 @@ def get_rankings(limit: int = 500, db: Session = Depends(get_db)):
             likelihood=likelihood,
             recommendation=recommendation,
             processing_status=profile.processing_status,
+            review_status=profile.review_status,
             judge_status=profile.judge_status,
             judge_auto_score=profile.judge_auto_score
         ))
@@ -299,6 +301,19 @@ def set_judge_status(profile_id: str, payload: dict, db: Session = Depends(get_d
         profile.judge_status = status
     if notes is not None:
         profile.judge_notes = notes
+    db.commit()
+    return {"ok": True}
+
+
+@app.patch("/profiles/{profile_id}/review")
+def set_review_status(profile_id: str, payload: dict, db: Session = Depends(get_db)):
+    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    status = payload.get("review_status")
+    if status not in ["under_review", "approved", "disapproved"]:
+        raise HTTPException(status_code=400, detail="Invalid review_status")
+    profile.review_status = status
     db.commit()
     return {"ok": True}
 
@@ -358,6 +373,74 @@ def recompute_judge_for_completed(db: Session = Depends(get_db)):
             updated += 1
         db.commit()
         return {"updated": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/scores/rebalance")
+def rebalance_scores_for_completed(db: Session = Depends(get_db)):
+    """Apply deterministic bonuses to existing final_score based on evidence/signals."""
+    try:
+        profiles = db.query(Profile).filter(Profile.processing_status == "completed").all()
+        updated = 0
+        for p in profiles:
+            base = p.final_score or 0.0
+            evidence = p.o1_evidence or {}
+            career_items = ", ".join([str(x) for x in evidence.get("career_progression", []) or []]).lower()
+            awards = evidence.get("awards", []) or []
+            publications = evidence.get("publications", []) or []
+
+            # Founder/leadership signal
+            founder = any(k in career_items for k in ["founder", "co-founder", "ceo", "coo", "cto", "head", "director"])
+
+            # Network reach from stored linkedin_data if available
+            basic = (p.linkedin_data or {}).get("basic_info", {})
+            reach = (basic.get("linkedin_connections") or 0) + (basic.get("linkedin_followers") or 0)
+
+            bonus = 0.0
+            if len(awards) > 0:
+                bonus += 0.4
+            if len(publications) > 0:
+                bonus += 0.4
+            if founder:
+                bonus += 0.3
+            if reach >= 7000:
+                bonus += 0.3
+            elif reach >= 2000:
+                bonus += 0.2
+
+            min_threshold = 6.8 if (founder and len(awards) > 0 and len(publications) > 0) else None
+
+            new_score = min(10.0, base + bonus)
+            if min_threshold is not None:
+                new_score = max(new_score, min_threshold)
+
+            # Only update if changed by > 0.01
+            if abs((p.final_score or 0) - new_score) > 0.01:
+                p.final_score = float(new_score)
+                # annotate adjustment
+                ga = p.gpt_assessment or {}
+                adj = ga.get("postprocess_adjustments", {})
+                adj.update({
+                    "bonus": round(bonus, 2),
+                    "min_threshold": min_threshold,
+                    "reach": reach,
+                    "founder": founder,
+                    "awards": len(awards),
+                    "publications": len(publications)
+                })
+                ga["postprocess_adjustments"] = adj
+                p.gpt_assessment = ga
+                updated += 1
+
+        # Recompute rankings
+        completed_profiles = db.query(Profile).filter(
+            Profile.processing_status == "completed", Profile.final_score.isnot(None)
+        ).order_by(Profile.final_score.desc()).all()
+        for idx, prof in enumerate(completed_profiles, 1):
+            prof.ranking = idx
+        db.commit()
+        return {"updated": updated, "reordered": len(completed_profiles)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

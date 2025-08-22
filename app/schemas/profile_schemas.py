@@ -40,6 +40,7 @@ class ProfileResponse(BaseModel):
     final_score: Optional[float] = Field(None, description="GPT-generated O-1 score")
     ranking: Optional[int] = Field(None, description="Position in ranking")
     processing_status: str = Field(default="pending", description="Processing status")
+    review_status: Optional[str] = Field(None, description="under_review | approved | disapproved")
     judge_status: Optional[str] = Field(None, description="unknown | candidate | not_candidate")
     judge_notes: Optional[str] = Field(None, description="Manual notes about judge suitability")
     judge_auto_score: Optional[float] = Field(None, description="Auto-suggest score 0..1")
@@ -95,6 +96,7 @@ class RankingEntry(BaseModel):
     likelihood: str
     recommendation: str
     processing_status: str
+    review_status: Optional[str] = Field(None, description="under_review | approved | disapproved")
     judge_status: Optional[str] = Field(None, description="unknown | candidate | not_candidate")
     judge_auto_score: Optional[float] = Field(None, description="Auto-suggest score 0..1")
 

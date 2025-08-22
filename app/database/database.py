@@ -69,6 +69,8 @@ def _ensure_profile_judge_columns():
                 alter_cmds.append("ALTER TABLE profiles ADD COLUMN judge_auto_score REAL")
             if 'judge_auto_reason' not in cols:
                 alter_cmds.append("ALTER TABLE profiles ADD COLUMN judge_auto_reason TEXT")
+            if 'review_status' not in cols:
+                alter_cmds.append("ALTER TABLE profiles ADD COLUMN review_status TEXT DEFAULT 'under_review'")
             for cmd in alter_cmds:
                 conn.execute(text(cmd))
     except Exception:

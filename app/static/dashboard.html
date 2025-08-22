@@ -351,7 +351,7 @@
                 <th>Evidence Summary</th>
                 <th>Contact Profile</th>
                 <th>Judge</th>
-                <th>Status</th>
+                <th>Review</th>
               </tr>
             </thead>
             <tbody id="rankingsBody">
@@ -1033,7 +1033,7 @@ P.S. I run a community for O-1/EB-1 applicants, publish a blog for AI developers
             ${renderJudgeCell(ranking)}
           </td>
           <td>
-            <span class="status-badge status-${ranking.processing_status}">${ranking.processing_status}</span>
+            ${renderReviewCell(ranking)}
           </td>
         </tr>
       `).join('');
@@ -1104,6 +1104,61 @@ P.S. I run a community for O-1/EB-1 applicants, publish a blog for AI developers
       } catch (e) { return NaN; }
     }
 
+    function renderReviewCell(ranking) {
+      const status = ranking.review_status || 'under_review';
+      const color = status === 'approved' ? '#22c55e' : (status === 'disapproved' ? '#ef4444' : '#f59e0b');
+      const label = status.replace('_', ' ');
+      return `
+        <div>
+          <span style="padding:2px 6px; border-radius:4px; background: rgba(255,255,255,0.06); border:1px solid var(--border); color:${color}; font-size:11px; font-weight:600; text-transform:uppercase;">${label}</span>
+          <div style="margin-top:6px;">
+            <button class="contact-btn" style="background: var(--card); border: 1px solid var(--border);" onclick='openReviewEditor(${JSON.stringify({ id: ranking.id, name: ranking.full_name }).replace(/"/g, "&quot;")}, "${status}")'>Edit</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function openReviewEditor(profileMeta, current) {
+      const modal = document.createElement('div');
+      modal.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px;`;
+      modal.innerHTML = `
+        <div style="background: var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; width:420px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0; color:var(--text);">Review status — ${profileMeta.name}</h3>
+            <button onclick="this.closest('div').parentElement.remove()" class="contact-btn" style="background: var(--card); border: 1px solid var(--border);">Close</button>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+            <label style="font-size:13px;">Status</label>
+            <select id="reviewStatus" style="flex:1; padding:8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+              <option value="under_review" ${current==='under_review'?'selected':''}>Under review</option>
+              <option value="approved" ${current==='approved'?'selected':''}>Approved</option>
+              <option value="disapproved" ${current==='disapproved'?'selected':''}>Disapproved</option>
+            </select>
+          </div>
+          <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="contact-btn" style="background: var(--primary);" onclick='saveReviewStatus("${profileMeta.id}", this)'>Save</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    }
+
+    async function saveReviewStatus(profileId, btn) {
+      try {
+        const root = btn.closest('div').parentElement;
+        const status = root.querySelector('#reviewStatus').value;
+        btn.disabled = true;
+        const res = await fetch(`/profiles/${profileId}/review`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ review_status: status })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        root.parentElement.remove();
+        loadRankings();
+      } catch (e) {
+        alert('Failed to save: ' + e.message);
+      } finally { btn.disabled = false; }
+    }
     function openJudgeEditor(profileMeta, state) {
       try {
         const modal = document.createElement('div');

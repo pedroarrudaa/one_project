@@ -49,6 +49,9 @@ class Profile(Base):
     judge_notes = Column(Text)
     judge_auto_score = Column(Float)  # 0..1 auto-suggest score
     judge_auto_reason = Column(Text)
+
+    # Manual review workflow for outreach
+    review_status = Column(String, default="under_review")  # under_review | approved | disapproved
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(
