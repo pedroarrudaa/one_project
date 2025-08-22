@@ -1,6 +1,6 @@
 """Database configuration and connection management."""
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 from sqlalchemy import event
@@ -26,7 +26,7 @@ engine = create_engine(
 
 # Enable SQLite foreign keys
 @event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
+def set_sqlite_pragma(dbapi_connection, _):
     try:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
@@ -51,3 +51,26 @@ def get_db():
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
+    _ensure_profile_judge_columns()
+
+
+def _ensure_profile_judge_columns():
+    """Ensure new judge-related columns exist on profiles (SQLite-safe)."""
+    try:
+        with engine.connect() as conn:
+            res = conn.execute(text("PRAGMA table_info('profiles')"))
+            cols = {row[1] for row in res.fetchall()}
+            alter_cmds = []
+            if 'judge_status' not in cols:
+                alter_cmds.append("ALTER TABLE profiles ADD COLUMN judge_status TEXT DEFAULT 'unknown'")
+            if 'judge_notes' not in cols:
+                alter_cmds.append("ALTER TABLE profiles ADD COLUMN judge_notes TEXT")
+            if 'judge_auto_score' not in cols:
+                alter_cmds.append("ALTER TABLE profiles ADD COLUMN judge_auto_score REAL")
+            if 'judge_auto_reason' not in cols:
+                alter_cmds.append("ALTER TABLE profiles ADD COLUMN judge_auto_reason TEXT")
+            for cmd in alter_cmds:
+                conn.execute(text(cmd))
+    except Exception:
+        # fail-safe: don't crash app on migration errors
+        pass

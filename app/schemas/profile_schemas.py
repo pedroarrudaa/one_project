@@ -40,6 +40,10 @@ class ProfileResponse(BaseModel):
     final_score: Optional[float] = Field(None, description="GPT-generated O-1 score")
     ranking: Optional[int] = Field(None, description="Position in ranking")
     processing_status: str = Field(default="pending", description="Processing status")
+    judge_status: Optional[str] = Field(None, description="unknown | candidate | not_candidate")
+    judge_notes: Optional[str] = Field(None, description="Manual notes about judge suitability")
+    judge_auto_score: Optional[float] = Field(None, description="Auto-suggest score 0..1")
+    judge_auto_reason: Optional[str] = Field(None, description="Why the auto score was given")
     
     created_at: datetime
     updated_at: datetime
@@ -75,6 +79,7 @@ class GPTAssessmentResponse(BaseModel):
 class RankingEntry(BaseModel):
     """Single entry in the rankings table."""
     
+    id: str
     rank: int
     full_name: str
     seniority_level: Optional[str] = Field(None, description="Professional seniority: Junior/Senior/Executive/VP")
@@ -90,6 +95,8 @@ class RankingEntry(BaseModel):
     likelihood: str
     recommendation: str
     processing_status: str
+    judge_status: Optional[str] = Field(None, description="unknown | candidate | not_candidate")
+    judge_auto_score: Optional[float] = Field(None, description="Auto-suggest score 0..1")
 
 
 class RankingResponse(BaseModel):

@@ -350,6 +350,7 @@
                 <th>Score</th>
                 <th>Evidence Summary</th>
                 <th>Contact Profile</th>
+                <th>Judge</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -1029,6 +1030,9 @@ P.S. I run a community for O-1/EB-1 applicants, publish a blog for AI developers
             </button>
           </td>
           <td>
+            ${renderJudgeCell(ranking)}
+          </td>
+          <td>
             <span class="status-badge status-${ranking.processing_status}">${ranking.processing_status}</span>
           </td>
         </tr>
@@ -1047,6 +1051,110 @@ P.S. I run a community for O-1/EB-1 applicants, publish a blog for AI developers
       if (score >= 7) return 'score-high';
       if (score >= 5) return 'score-medium';
       return 'score-low';
+    }
+
+    // Judge rendering and editor
+    function renderJudgeCell(ranking) {
+      try {
+        // Derive a simple frontend flag if backend didn't compute
+        const auto = typeof ranking.judge_auto_score === 'number' ? ranking.judge_auto_score : computeJudgeAutoLocal(ranking);
+        const status = ranking.judge_status || (auto >= 0.6 ? 'candidate' : 'unknown');
+        const badgeColor = status === 'candidate' ? '#22c55e' : (status === 'not_candidate' ? '#ef4444' : '#8a94a7');
+        const badgeText = status === 'candidate' ? 'Candidate' : (status === 'not_candidate' ? 'Not candidate' : 'Unknown');
+        const autoText = isNaN(auto) ? '' : `<div style="font-size:10px; color: var(--muted);">Auto: ${auto.toFixed(2)}</div>`;
+        return `
+          <div>
+            <span style="padding:2px 6px; border-radius:4px; background: rgba(255,255,255,0.06); border:1px solid var(--border); color:${badgeColor}; font-size:11px; font-weight:600;">${badgeText}</span>
+            ${autoText}
+            <div style="margin-top:6px;">
+              <button class="contact-btn" style="background: var(--card); border: 1px solid var(--border);" onclick='openJudgeEditor(${JSON.stringify({ id: ranking.id, name: ranking.full_name }).replace(/"/g, "&quot;")}, ${JSON.stringify({ status, auto }).replace(/"/g, "&quot;")})'>Edit</button>
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        console.warn('renderJudgeCell error', e);
+        return '<span style="color: var(--muted);">-</span>';
+      }
+    }
+
+    function computeJudgeAutoLocal(ranking) {
+      try {
+        let pts = 0, maxPts = 6;
+        const title = (ranking.current_title || '').toLowerCase();
+        const senior = ["founder","co-founder","principal","staff","lead","head","director","professor","research scientist"];
+        if (senior.some(s => title.includes(s))) pts += 1;
+
+        const fc = ranking.follower_counts || {};
+        const total = (fc.linkedin_connections || 0) + (fc.linkedin_followers || 0);
+        if (total >= 7000) pts += 2; else if (total >= 3000) pts += 1;
+
+        const company = ranking.evidence?.company_prestige?.[0] || '';
+        const tier = ["Google","Meta","Apple","Microsoft","Amazon","NVIDIA"];
+        if (company && tier.some(t => company.includes(t))) pts += 1;
+
+        const ev = ranking.evidence || {};
+        const memberships = (ev.memberships || []).length + (ev.professional_memberships || []).length + (ev.organizations || []).length + (ev.volunteer_experience || []).length;
+        if (memberships >= 1) pts += 1;
+
+        const impact = (ev.awards || []).length + (ev.publications || []).length + (ev.projects || []).length;
+        if (impact >= 1) pts += 1;
+
+        // recommendations_count exists inside linkedin_data.basic_info; not available here reliably
+        return Math.max(0, Math.min(1, pts / maxPts));
+      } catch (e) { return NaN; }
+    }
+
+    function openJudgeEditor(profileMeta, state) {
+      try {
+        const modal = document.createElement('div');
+        modal.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px;`;
+        const current = state.status || 'unknown';
+        modal.innerHTML = `
+          <div style="background: var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; width:520px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h3 style="margin:0; color:var(--text);">Judge decision — ${profileMeta.name}</h3>
+              <button onclick="this.closest('div').parentElement.remove()" class="contact-btn" style="background: var(--card); border: 1px solid var(--border);">Close</button>
+            </div>
+            <div style="margin-bottom:10px; font-size:12px; color:var(--muted);">Auto-suggestion: ${isNaN(state.auto)?'-':state.auto.toFixed(2)}</div>
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+              <label style="font-size:13px;">Status</label>
+              <select id="judgeStatus" style="flex:1; padding:8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;">
+                <option value="unknown" ${current==='unknown'?'selected':''}>Unknown</option>
+                <option value="candidate" ${current==='candidate'?'selected':''}>Candidate</option>
+                <option value="not_candidate" ${current==='not_candidate'?'selected':''}>Not candidate</option>
+              </select>
+            </div>
+            <div style="margin-bottom:12px;">
+              <label style="font-size:13px; display:block; margin-bottom:6px;">Notes</label>
+              <textarea id="judgeNotes" style="width:100%; height:120px; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;"></textarea>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+              <button class="contact-btn" style="background: var(--primary);" onclick='saveJudgeDecision("${profileMeta.id}", this)'>Save</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+      } catch (e) {
+        console.error('openJudgeEditor error', e);
+      }
+    }
+
+    async function saveJudgeDecision(profileId, btn) {
+      try {
+        const root = btn.closest('div').parentElement;
+        const status = root.querySelector('#judgeStatus').value;
+        const notes = root.querySelector('#judgeNotes').value;
+        btn.disabled = true;
+        const res = await fetch(`/profiles/${profileId}/judge`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ judge_status: status, judge_notes: notes })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        root.parentElement.remove();
+        loadRankings();
+      } catch (e) {
+        alert('Failed to save: ' + e.message);
+      } finally { btn.disabled = false; }
     }
 
     function formatEvidence(evidence, followerCounts) {

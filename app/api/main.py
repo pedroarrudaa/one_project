@@ -17,6 +17,7 @@ from app.schemas import (
     GPTAssessmentResponse,
     RankingResponse,
     RankingEntry,
+    # for judge endpoints
     ProcessingLogsResponse,
     ProcessingStatsResponse,
     BatchProcessingRequest,
@@ -240,6 +241,7 @@ def get_rankings(limit: int = 500, db: Session = Depends(get_db)):
                 github_metrics = github_data.get("metrics", {})
         
         rankings.append(RankingEntry(
+            id=profile.id,
             rank=rank,
             full_name=profile.name,
             seniority_level=seniority_level,
@@ -254,7 +256,9 @@ def get_rankings(limit: int = 500, db: Session = Depends(get_db)):
             score=profile.final_score,
             likelihood=likelihood,
             recommendation=recommendation,
-            processing_status=profile.processing_status
+            processing_status=profile.processing_status,
+            judge_status=profile.judge_status,
+            judge_auto_score=profile.judge_auto_score
         ))
     
     return RankingResponse(
@@ -265,6 +269,38 @@ def get_rankings(limit: int = 500, db: Session = Depends(get_db)):
             "last_updated": profiles[0].updated_at.isoformat() if profiles else None
         }
     )
+
+
+# Judge endpoints
+@app.get("/profiles/{profile_id}/judge")
+def get_judge_status(profile_id: str, db: Session = Depends(get_db)):
+    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return {
+        "profile_id": profile.id,
+        "judge_status": profile.judge_status,
+        "judge_notes": profile.judge_notes,
+        "judge_auto_score": profile.judge_auto_score,
+        "judge_auto_reason": profile.judge_auto_reason,
+    }
+
+
+@app.patch("/profiles/{profile_id}/judge")
+def set_judge_status(profile_id: str, payload: dict, db: Session = Depends(get_db)):
+    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    status = payload.get("judge_status")
+    notes = payload.get("judge_notes")
+    if status not in [None, "unknown", "candidate", "not_candidate"]:
+        raise HTTPException(status_code=400, detail="Invalid judge_status")
+    if status is not None:
+        profile.judge_status = status
+    if notes is not None:
+        profile.judge_notes = notes
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/stats", response_model=ProcessingStatsResponse)

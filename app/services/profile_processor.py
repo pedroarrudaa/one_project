@@ -221,6 +221,15 @@ class ProfileProcessor:
             profile.final_score = assessment.get("overall_score", 0.0)
             profile.processing_status = "completed"
             profile.updated_at = datetime.utcnow()
+
+            # Compute judge auto-suggestion
+            auto_score, auto_reason = self._compute_judge_auto_suggestion(linkedin_data, assessment)
+            profile.judge_auto_score = auto_score
+            profile.judge_auto_reason = auto_reason
+            # Only set default status if still unknown
+            if not profile.judge_status or profile.judge_status == "unknown":
+                # mark as candidate if high auto score
+                profile.judge_status = "candidate" if (auto_score is not None and auto_score >= 0.6) else "unknown"
             
             # GitHub data removed from storage
             
@@ -231,6 +240,70 @@ class ProfileProcessor:
         except Exception as e:
             self._log_step(db, profile.id, "save_results", "failed", str(e))
             raise
+
+    def _compute_judge_auto_suggestion(self, linkedin_data: Dict[str, Any], assessment: Dict[str, Any]) -> tuple[float, str]:
+        """Heuristic judge auto-score (0..1) and reason from LinkedIn data."""
+        try:
+            score_points = 0
+            max_points = 6
+            reasons = []
+            basic = (linkedin_data or {}).get("basic_info", {})
+            headline = (basic.get("headline") or "").lower()
+            current_company = (basic.get("current_company") or "")
+
+            # Seniority/title
+            senior_terms = ["founder", "co-founder", "principal", "staff", "lead", "head", "director", "professor", "research scientist"]
+            if any(t in headline for t in senior_terms):
+                score_points += 1
+                reasons.append("senior title")
+
+            # LinkedIn network
+            connections = (basic.get("linkedin_connections") or 0)
+            followers = (basic.get("linkedin_followers") or 0)
+            total = (connections or 0) + (followers or 0)
+            if total >= 7000:
+                score_points += 2
+                reasons.append("large network ≥7k")
+            elif total >= 3000:
+                score_points += 1
+                reasons.append("network ≥3k")
+
+            # Company prestige
+            tier_companies = ["Google", "Meta", "Apple", "Microsoft", "Amazon", "NVIDIA"]
+            if current_company and any(c in current_company for c in tier_companies):
+                score_points += 1
+                reasons.append("tier-1 company")
+
+            # Community involvement
+            acc = (linkedin_data or {}).get("accomplishments", {})
+            memberships = acc.get("memberships", []) or []
+            prof_memberships = acc.get("professional_memberships", []) or []
+            orgs = acc.get("organizations", []) or []
+            volunteer = acc.get("volunteer_experience", []) or []
+            if any([memberships, prof_memberships, orgs, volunteer]) and (
+                len(memberships) + len(prof_memberships) + len(orgs) + len(volunteer) >= 1
+            ):
+                score_points += 1
+                reasons.append("community roles/memberships")
+
+            # Visibility/impact
+            awards = acc.get("awards", []) or []
+            publications = acc.get("publications", []) or []
+            projects = acc.get("projects", []) or []
+            if any([awards, publications, projects]):
+                score_points += 1
+                reasons.append("awards/publications/projects")
+
+            # Recommendations
+            recs = basic.get("recommendations_count") or 0
+            if recs >= 5:
+                score_points += 1
+                reasons.append("≥5 recommendations")
+
+            score = min(1.0, max(0.0, score_points / max_points)) if max_points > 0 else 0.0
+            return score, ", ".join(reasons)
+        except Exception:
+            return None, ""
     
     async def _update_rankings(self, db: Session):
         """Update rankings for all completed profiles."""

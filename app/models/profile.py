@@ -43,6 +43,12 @@ class Profile(Base):
     final_score = Column(Float)   # GPT-generated score
     ranking = Column(Integer)     # Position in ranking
     processing_status = Column(String, default="pending")  # pending, processing, completed, failed
+
+    # Judge suitability (manual + auto-suggestion)
+    judge_status = Column(String, default="unknown")  # unknown | candidate | not_candidate
+    judge_notes = Column(Text)
+    judge_auto_score = Column(Float)  # 0..1 auto-suggest score
+    judge_auto_reason = Column(Text)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(
